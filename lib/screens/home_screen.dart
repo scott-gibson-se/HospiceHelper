@@ -33,6 +33,14 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              await context.read<MedicationProvider>().loadMedications();
+              await context.read<MedicationProvider>().loadDoseLogs();
+            },
+            tooltip: 'Refresh Data',
+          ),
+          IconButton(
             icon: const Icon(Icons.history),
             onPressed: () {
               Navigator.push(
@@ -93,10 +101,15 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: provider.medications.length,
-            itemBuilder: (context, index) {
+          return RefreshIndicator(
+            onRefresh: () async {
+              await provider.loadMedications();
+              await provider.loadDoseLogs();
+            },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: provider.medications.length,
+              itemBuilder: (context, index) {
               final medication = provider.medications[index];
               final isDue = provider.isMedicationDue(medication);
               final timeUntilNext = provider.getTimeUntilNextDose(medication);
@@ -188,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             },
+            ),
           );
         },
       ),
