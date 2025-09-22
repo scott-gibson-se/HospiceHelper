@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/medication_provider.dart';
 import 'providers/question_provider.dart';
+import 'providers/note_provider.dart';
 import 'services/notification_service.dart';
 import 'screens/home_screen.dart';
 
@@ -23,6 +24,7 @@ class HospiceMedsApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => MedicationProvider()),
         ChangeNotifierProvider(create: (context) => QuestionProvider()),
+        ChangeNotifierProvider(create: (context) => NoteProvider()),
       ],
       child: MaterialApp(
         title: 'Hospice Helper',

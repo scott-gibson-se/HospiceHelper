@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
 import '../models/question.dart';
+import '../models/note.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -22,7 +23,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'hospice_meds.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -72,6 +73,17 @@ class DatabaseHelper {
         updated_at INTEGER
       )
     ''');
+
+    // Create notes table
+    await db.execute('''
+      CREATE TABLE notes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -87,6 +99,18 @@ class DatabaseHelper {
           answered_at INTEGER,
           created_at INTEGER NOT NULL,
           updated_at INTEGER
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      // Add notes table for version 3
+      await db.execute('''
+        CREATE TABLE notes(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
         )
       ''');
     }
@@ -286,5 +310,52 @@ class DatabaseHelper {
       orderBy: 'answered_at DESC',
     );
     return List.generate(maps.length, (i) => Question.fromMap(maps[i]));
+  }
+
+  // Note CRUD operations
+  Future<int> insertNote(Note note) async {
+    final db = await database;
+    return await db.insert('notes', note.toMap());
+  }
+
+  Future<List<Note>> getAllNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'notes',
+      orderBy: 'updated_at DESC',
+    );
+    return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
+  }
+
+  Future<Note?> getNote(int id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isNotEmpty) {
+      return Note.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<int> updateNote(Note note) async {
+    final db = await database;
+    return await db.update(
+      'notes',
+      note.toMap(),
+      where: 'id = ?',
+      whereArgs: [note.id],
+    );
+  }
+
+  Future<int> deleteNote(int id) async {
+    final db = await database;
+    return await db.delete(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 }

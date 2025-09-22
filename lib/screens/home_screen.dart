@@ -3,15 +3,19 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/medication_provider.dart';
 import '../providers/question_provider.dart';
+import '../providers/note_provider.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
 import '../models/question.dart';
+import '../models/note.dart';
 import 'add_medication_screen.dart';
 import 'medication_detail_screen.dart';
 import 'dose_log_screen.dart';
 import 'settings_screen.dart';
 import 'add_question_screen.dart';
 import 'question_detail_screen.dart';
+import 'add_note_screen.dart';
+import 'note_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: 0);
     _questionsTabController = TabController(length: 3, vsync: this, initialIndex: 0);
     _tabController.addListener(() {
       setState(() {}); // Rebuild when tab changes to update FAB
@@ -39,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       context.read<MedicationProvider>().loadMedications();
       context.read<MedicationProvider>().loadDoseLogs();
       context.read<QuestionProvider>().loadQuestions();
+      context.read<NoteProvider>().loadNotes();
     });
   }
 
@@ -66,6 +71,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               text: 'Questions',
               icon: Icon(Icons.help_outline),
             ),
+            Tab(
+              text: 'Notes',
+              icon: Icon(Icons.note),
+            ),
           ],
         ),
         actions: [
@@ -75,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               await context.read<MedicationProvider>().loadMedications();
               await context.read<MedicationProvider>().loadDoseLogs();
               await context.read<QuestionProvider>().loadQuestions();
+              await context.read<NoteProvider>().loadNotes();
             },
             tooltip: 'Refresh Data',
           ),
@@ -109,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         children: [
           _buildMedicationsTab(),
           _buildQuestionsTab(),
+          _buildNotesTab(),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -125,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             if (mounted) {
               context.read<MedicationProvider>().loadMedications();
             }
-          } else {
+          } else if (_tabController.index == 1) {
             // Questions tab - add question
             await Navigator.push(
               context,
@@ -137,9 +148,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             if (mounted) {
               context.read<QuestionProvider>().loadQuestions();
             }
+          } else {
+            // Notes tab - add note
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AddNoteScreen(),
+              ),
+            );
+            // Refresh notes when returning
+            if (mounted) {
+              context.read<NoteProvider>().loadNotes();
+            }
           }
         },
-        tooltip: _tabController.index == 0 ? 'Add Medication' : 'Add Question',
+        tooltip: _tabController.index == 0 
+            ? 'Add Medication' 
+            : _tabController.index == 1 
+                ? 'Add Question' 
+                : 'Add Note',
         child: const Icon(Icons.add),
       ),
     );
@@ -611,6 +638,145 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Refresh questions when returning from detail screen
           if (mounted) {
             context.read<QuestionProvider>().loadQuestions();
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildNotesTab() {
+    return Consumer<NoteProvider>(
+      builder: (context, noteProvider, child) {
+        if (noteProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (noteProvider.notes.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.note,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No notes added yet',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap the + button to add your first note',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () => noteProvider.loadNotes(),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(8),
+            itemCount: noteProvider.notes.length,
+            itemBuilder: (context, index) {
+              final note = noteProvider.notes[index];
+              return _buildNoteCard(note);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNoteCard(Note note) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: note.isModified 
+              ? Colors.blue.shade100 
+              : Colors.green.shade100,
+          child: Icon(
+            note.isModified ? Icons.edit : Icons.note,
+            color: note.isModified 
+                ? Colors.blue.shade700 
+                : Colors.green.shade700,
+          ),
+        ),
+        title: Text(
+          note.title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              note.body,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  size: 16,
+                  color: Colors.grey.shade500,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  DateFormat('MMM dd, yyyy - HH:mm').format(note.updatedAt),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: note.isModified 
+                        ? Colors.blue.shade100 
+                        : Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    note.lastModifiedText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: note.isModified 
+                          ? Colors.blue.shade700 
+                          : Colors.green.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => NoteDetailScreen(note: note),
+            ),
+          );
+          // Refresh notes when returning from detail screen
+          if (mounted) {
+            context.read<NoteProvider>().loadNotes();
           }
         },
       ),
