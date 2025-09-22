@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/medication_provider.dart';
+import '../providers/question_provider.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
 import 'add_medication_screen.dart';
 import 'medication_detail_screen.dart';
 import 'dose_log_screen.dart';
 import 'settings_screen.dart';
+import 'questions_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MedicationProvider>().loadMedications();
       context.read<MedicationProvider>().loadDoseLogs();
+      context.read<QuestionProvider>().loadQuestions();
     });
   }
 
@@ -33,10 +36,27 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
+            icon: const Icon(Icons.help_outline),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const QuestionsListScreen(),
+                ),
+              );
+              // Refresh questions when returning
+              if (mounted) {
+                context.read<QuestionProvider>().loadQuestions();
+              }
+            },
+            tooltip: 'Questions',
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () async {
               await context.read<MedicationProvider>().loadMedications();
               await context.read<MedicationProvider>().loadDoseLogs();
+              await context.read<QuestionProvider>().loadQuestions();
             },
             tooltip: 'Refresh Data',
           ),
@@ -66,13 +86,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Consumer<MedicationProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
+      body: Consumer2<MedicationProvider, QuestionProvider>(
+        builder: (context, medicationProvider, questionProvider, child) {
+          if (medicationProvider.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (provider.medications.isEmpty) {
+          if (medicationProvider.medications.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -103,104 +123,143 @@ class _HomeScreenState extends State<HomeScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              await provider.loadMedications();
-              await provider.loadDoseLogs();
+              await medicationProvider.loadMedications();
+              await medicationProvider.loadDoseLogs();
+              await questionProvider.loadQuestions();
             },
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.all(16),
-              itemCount: provider.medications.length,
-              itemBuilder: (context, index) {
-              final medication = provider.medications[index];
-              final isDue = provider.isMedicationDue(medication);
-              final timeUntilNext = provider.getTimeUntilNextDose(medication);
-              final lastDose = provider.doseLogs
-                  .where((d) => d.medicationId == medication.id)
-                  .isNotEmpty
-                  ? provider.doseLogs
-                      .where((d) => d.medicationId == medication.id)
-                      .reduce((a, b) => a.dateTime.isAfter(b.dateTime) ? a : b)
-                  : null;
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: isDue 
-                        ? Colors.red[100] 
-                        : Colors.green[100],
-                    child: Icon(
-                      Icons.medication,
-                      color: isDue ? Colors.red : Colors.green,
+              children: [
+                // Questions Summary Card
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: questionProvider.unansweredCount > 0 
+                          ? Colors.orange.shade100 
+                          : Colors.green.shade100,
+                      child: Icon(
+                        Icons.help_outline,
+                        color: questionProvider.unansweredCount > 0 
+                            ? Colors.orange.shade700 
+                            : Colors.green.shade700,
+                      ),
                     ),
-                  ),
-                  title: Text(
-                    medication.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${medication.form} • Max: ${medication.maxDosage} • Interval: ${medication.formattedTimeInterval}'),
-                      if (lastDose != null)
-                        Text(
-                          'Last dose: ${lastDose.doseGiven} ${medication.form}',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
+                    title: const Text(
+                      'Questions',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${questionProvider.unansweredCount} pending, ${questionProvider.answeredCount} answered',
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const QuestionsListScreen(),
                         ),
-                      if (timeUntilNext != null)
-                        Text(
-                          'Next dose in: ${_formatDuration(timeUntilNext)}',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
-                        )
-                      else if (isDue)
-                        Text(
-                          'Due now!',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                    ],
+                      );
+                      // Refresh questions when returning
+                      if (mounted) {
+                        context.read<QuestionProvider>().loadQuestions();
+                      }
+                    },
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isDue)
-                        IconButton(
-                          icon: const Icon(Icons.add_circle, color: Colors.green),
-                          onPressed: () => _showLogDoseDialog(context, medication),
-                          tooltip: 'Log Dose',
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.info_outline),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MedicationDetailScreen(medication: medication),
-                            ),
-                          );
-                        },
-                        tooltip: 'View Details',
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MedicationDetailScreen(medication: medication),
-                      ),
-                    );
-                  },
                 ),
-              );
-            },
+                // Medications List
+                ...medicationProvider.medications.map((medication) {
+                  final isDue = medicationProvider.isMedicationDue(medication);
+                  final timeUntilNext = medicationProvider.getTimeUntilNextDose(medication);
+                  final lastDose = medicationProvider.doseLogs
+                      .where((d) => d.medicationId == medication.id)
+                      .isNotEmpty
+                      ? medicationProvider.doseLogs
+                          .where((d) => d.medicationId == medication.id)
+                          .reduce((a, b) => a.dateTime.isAfter(b.dateTime) ? a : b)
+                      : null;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: isDue 
+                            ? Colors.red[100] 
+                            : Colors.green[100],
+                        child: Icon(
+                          Icons.medication,
+                          color: isDue ? Colors.red : Colors.green,
+                        ),
+                      ),
+                      title: Text(
+                        medication.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${medication.form} • Max: ${medication.maxDosage} • Interval: ${medication.formattedTimeInterval}'),
+                          if (lastDose != null)
+                            Text(
+                              'Last dose: ${lastDose.doseGiven} ${medication.form}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          if (timeUntilNext != null)
+                            Text(
+                              'Next dose in: ${_formatDuration(timeUntilNext)}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            )
+                          else if (isDue)
+                            Text(
+                              'Due now!',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isDue)
+                            IconButton(
+                              icon: const Icon(Icons.add_circle, color: Colors.green),
+                              onPressed: () => _showLogDoseDialog(context, medication),
+                              tooltip: 'Log Dose',
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.info_outline),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => MedicationDetailScreen(medication: medication),
+                                ),
+                              );
+                            },
+                            tooltip: 'View Details',
+                          ),
+                        ],
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MedicationDetailScreen(medication: medication),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }).toList(),
+              ],
             ),
           );
         },

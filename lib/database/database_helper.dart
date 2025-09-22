@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
+import '../models/question.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -21,8 +22,9 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'hospice_meds.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -56,6 +58,38 @@ class DatabaseHelper {
         FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
       )
     ''');
+
+    // Create questions table
+    await db.execute('''
+      CREATE TABLE questions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        question_text TEXT NOT NULL,
+        date_entered INTEGER NOT NULL,
+        answer TEXT,
+        answered_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER
+      )
+    ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add questions table for version 2
+      await db.execute('''
+        CREATE TABLE questions(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          question_text TEXT NOT NULL,
+          date_entered INTEGER NOT NULL,
+          answer TEXT,
+          answered_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER
+        )
+      ''');
+    }
   }
 
   // Medication CRUD operations
@@ -183,5 +217,74 @@ class DatabaseHelper {
       ) dl ON m.id = dl.medication_id AND dl.rn = 1
       ORDER BY m.name
     ''');
+  }
+
+  // Question CRUD operations
+  Future<int> insertQuestion(Question question) async {
+    final db = await database;
+    return await db.insert('questions', question.toMap());
+  }
+
+  Future<List<Question>> getAllQuestions() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'questions',
+      orderBy: 'date_entered DESC',
+    );
+    return List.generate(maps.length, (i) => Question.fromMap(maps[i]));
+  }
+
+  Future<Question?> getQuestion(int id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'questions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isNotEmpty) {
+      return Question.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<int> updateQuestion(Question question) async {
+    final db = await database;
+    return await db.update(
+      'questions',
+      question.toMap(),
+      where: 'id = ?',
+      whereArgs: [question.id],
+    );
+  }
+
+  Future<int> deleteQuestion(int id) async {
+    final db = await database;
+    return await db.delete(
+      'questions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<List<Question>> getUnansweredQuestions() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'questions',
+      where: 'answer IS NULL OR answer = ?',
+      whereArgs: [''],
+      orderBy: 'date_entered DESC',
+    );
+    return List.generate(maps.length, (i) => Question.fromMap(maps[i]));
+  }
+
+  Future<List<Question>> getAnsweredQuestions() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'questions',
+      where: 'answer IS NOT NULL AND answer != ?',
+      whereArgs: [''],
+      orderBy: 'answered_at DESC',
+    );
+    return List.generate(maps.length, (i) => Question.fromMap(maps[i]));
   }
 }
