@@ -17,7 +17,8 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _officialNameController = TextEditingController();
   final _formController = TextEditingController();
   final _maxDosageController = TextEditingController();
-  final _minTimeController = TextEditingController();
+  final _minTimeHoursController = TextEditingController();
+  final _minTimeMinutesController = TextEditingController();
 
   bool _notificationsEnabled = false;
   String _selectedSound = 'gentle';
@@ -41,7 +42,8 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     _officialNameController.dispose();
     _formController.dispose();
     _maxDosageController.dispose();
-    _minTimeController.dispose();
+    _minTimeHoursController.dispose();
+    _minTimeMinutesController.dispose();
     super.dispose();
   }
 
@@ -142,23 +144,59 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _minTimeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Minimum Time Between Doses (minutes) *',
-                        hintText: 'e.g., 240',
-                        border: OutlineInputBorder(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _minTimeHoursController,
+                            decoration: const InputDecoration(
+                              labelText: 'Hours *',
+                              hintText: '0',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Required';
+                              }
+                              final hours = int.tryParse(value);
+                              if (hours == null || hours < 0) {
+                                return 'Invalid';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _minTimeMinutesController,
+                            decoration: const InputDecoration(
+                              labelText: 'Minutes *',
+                              hintText: '30',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Required';
+                              }
+                              final minutes = int.tryParse(value);
+                              if (minutes == null || minutes < 0 || minutes >= 60) {
+                                return '0-59';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Minimum time between doses',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
                       ),
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter minimum time between doses';
-                        }
-                        if (int.tryParse(value) == null || int.parse(value) <= 0) {
-                          return 'Please enter a valid time in minutes';
-                        }
-                        return null;
-                      },
                     ),
                   ],
                 ),
@@ -230,12 +268,23 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   void _saveMedication() {
     if (_formKey.currentState!.validate()) {
+      final hours = int.parse(_minTimeHoursController.text);
+      final minutes = int.parse(_minTimeMinutesController.text);
+      
+      // Validate that at least one field has a value
+      if (hours == 0 && minutes == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter at least 1 minute for the time interval')),
+        );
+        return;
+      }
+      
       final medication = Medication(
         name: _nameController.text,
         officialName: _officialNameController.text,
         form: _formController.text,
         maxDosage: double.parse(_maxDosageController.text),
-        minTimeBetweenDoses: int.parse(_minTimeController.text),
+        minTimeBetweenDoses: Medication.fromHoursAndMinutes(hours, minutes),
         notificationsEnabled: _notificationsEnabled,
         notificationSound: _selectedSound,
         createdAt: DateTime.now(),

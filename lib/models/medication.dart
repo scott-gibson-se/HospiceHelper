@@ -80,4 +80,22 @@ class Medication {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  // Helper methods for hours and minutes conversion
+  int get hours => minTimeBetweenDoses ~/ 60;
+  int get minutes => minTimeBetweenDoses % 60;
+  
+  String get formattedTimeInterval {
+    if (hours > 0 && minutes > 0) {
+      return '${hours}h ${minutes}m';
+    } else if (hours > 0) {
+      return '${hours}h';
+    } else {
+      return '${minutes}m';
+    }
+  }
+
+  static int fromHoursAndMinutes(int hours, int minutes) {
+    return (hours * 60) + minutes;
+  }
 }

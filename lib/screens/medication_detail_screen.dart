@@ -105,7 +105,7 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                       const SizedBox(height: 16),
                       _buildInfoRow('Form', widget.medication.form),
                       _buildInfoRow('Max Dosage', '${widget.medication.maxDosage} ${widget.medication.form}'),
-                      _buildInfoRow('Min Time Between Doses', '${widget.medication.minTimeBetweenDoses} minutes'),
+                      _buildInfoRow('Min Time Between Doses', widget.medication.formattedTimeInterval),
                       _buildInfoRow('Notifications', widget.medication.notificationsEnabled ? 'Enabled' : 'Disabled'),
                       if (widget.medication.notificationsEnabled)
                         _buildInfoRow('Notification Sound', NotificationService.getSoundDescription(widget.medication.notificationSound)),

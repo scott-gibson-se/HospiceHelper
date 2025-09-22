@@ -22,7 +22,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   late TextEditingController _officialNameController;
   late TextEditingController _formController;
   late TextEditingController _maxDosageController;
-  late TextEditingController _minTimeController;
+  late TextEditingController _minTimeHoursController;
+  late TextEditingController _minTimeMinutesController;
 
   late bool _notificationsEnabled;
   late String _selectedSound;
@@ -47,7 +48,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     _officialNameController = TextEditingController(text: widget.medication.officialName);
     _formController = TextEditingController(text: widget.medication.form);
     _maxDosageController = TextEditingController(text: widget.medication.maxDosage.toString());
-    _minTimeController = TextEditingController(text: widget.medication.minTimeBetweenDoses.toString());
+    _minTimeHoursController = TextEditingController(text: widget.medication.hours.toString());
+    _minTimeMinutesController = TextEditingController(text: widget.medication.minutes.toString());
     
     _notificationsEnabled = widget.medication.notificationsEnabled;
     _selectedSound = widget.medication.notificationSound;
@@ -59,7 +61,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     _officialNameController.dispose();
     _formController.dispose();
     _maxDosageController.dispose();
-    _minTimeController.dispose();
+    _minTimeHoursController.dispose();
+    _minTimeMinutesController.dispose();
     super.dispose();
   }
 
@@ -167,23 +170,59 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _minTimeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Minimum Time Between Doses (minutes) *',
-                        hintText: 'e.g., 240',
-                        border: OutlineInputBorder(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _minTimeHoursController,
+                            decoration: const InputDecoration(
+                              labelText: 'Hours *',
+                              hintText: '0',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Required';
+                              }
+                              final hours = int.tryParse(value);
+                              if (hours == null || hours < 0) {
+                                return 'Invalid';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _minTimeMinutesController,
+                            decoration: const InputDecoration(
+                              labelText: 'Minutes *',
+                              hintText: '30',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Required';
+                              }
+                              final minutes = int.tryParse(value);
+                              if (minutes == null || minutes < 0 || minutes >= 60) {
+                                return '0-59';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Minimum time between doses',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
                       ),
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter minimum time between doses';
-                        }
-                        if (int.tryParse(value) == null || int.parse(value) <= 0) {
-                          return 'Please enter a valid time in minutes';
-                        }
-                        return null;
-                      },
                     ),
                   ],
                 ),
@@ -262,12 +301,23 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 
   void _updateMedication() {
     if (_formKey.currentState!.validate()) {
+      final hours = int.parse(_minTimeHoursController.text);
+      final minutes = int.parse(_minTimeMinutesController.text);
+      
+      // Validate that at least one field has a value
+      if (hours == 0 && minutes == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter at least 1 minute for the time interval')),
+        );
+        return;
+      }
+      
       final updatedMedication = widget.medication.copyWith(
         name: _nameController.text,
         officialName: _officialNameController.text,
         form: _formController.text,
         maxDosage: double.parse(_maxDosageController.text),
-        minTimeBetweenDoses: int.parse(_minTimeController.text),
+        minTimeBetweenDoses: Medication.fromHoursAndMinutes(hours, minutes),
         notificationsEnabled: _notificationsEnabled,
         notificationSound: _selectedSound,
         updatedAt: DateTime.now(),

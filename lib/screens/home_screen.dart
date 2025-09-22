@@ -120,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${medication.form} • Max: ${medication.maxDosage}'),
+                      Text('${medication.form} • Max: ${medication.maxDosage} • Interval: ${medication.formattedTimeInterval}'),
                       if (timeUntilNext != null)
                         Text(
                           'Next dose in: ${_formatDuration(timeUntilNext)}',

@@ -91,7 +91,7 @@ class PdfService {
                 _buildTableCell(med.officialName),
                 _buildTableCell(med.form),
                 _buildTableCell('${med.maxDosage}'),
-                _buildTableCell('${med.minTimeBetweenDoses} min'),
+                _buildTableCell(med.formattedTimeInterval),
               ],
             )),
           ],
