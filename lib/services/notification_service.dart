@@ -45,47 +45,80 @@ class NotificationService {
   Future<void> scheduleMedicationNotification(Medication medication) async {
     if (!medication.notificationsEnabled) return;
 
-    // Cancel existing notifications for this medication
-    await cancelMedicationNotifications(medication.id!);
+    try {
+      // Cancel existing notifications for this medication
+      await cancelMedicationNotifications(medication.id!);
 
-    // Get the last dose time
-    // This would typically come from the database
-    // For now, we'll schedule a notification for 1 hour from now as an example
-    final now = DateTime.now();
-    final scheduledTime = tz.TZDateTime.from(now.add(Duration(minutes: medication.minTimeBetweenDoses)), tz.local);
+      // Get the last dose time
+      // This would typically come from the database
+      // For now, we'll schedule a notification for 1 hour from now as an example
+      final now = DateTime.now();
+      final scheduledTime = tz.TZDateTime.from(now.add(Duration(minutes: medication.minTimeBetweenDoses)), tz.local);
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'medication_reminders',
-      'Medication Reminders',
-      channelDescription: 'Reminders for medication doses',
-      importance: Importance.high,
-      priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound('gentle'),
-    );
+      // Create notification details based on sound preference
+      AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'medication_reminders',
+        'Medication Reminders',
+        channelDescription: 'Reminders for medication doses',
+        importance: Importance.high,
+        priority: Priority.high,
+      );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      sound: 'gentle.wav',
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+      // Add sound based on preference
+      if (medication.notificationSound != 'gentle') {
+        androidDetails = AndroidNotificationDetails(
+          'medication_reminders',
+          'Medication Reminders',
+          channelDescription: 'Reminders for medication doses',
+          importance: Importance.high,
+          priority: Priority.high,
+          sound: _getNotificationSound(medication.notificationSound),
+        );
+      }
 
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
 
-    await _notifications.zonedSchedule(
-      medication.id!,
-      'Medication Reminder',
-      'Time for ${medication.name} (${medication.form})',
-      scheduledTime,
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'medication_${medication.id}',
-    );
+      final NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _notifications.zonedSchedule(
+        medication.id!,
+        'Medication Reminder',
+        'Time for ${medication.name} (${medication.form})',
+        scheduledTime,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'medication_${medication.id}',
+      );
+    } catch (e) {
+      debugPrint('Error scheduling notification: $e');
+      rethrow; // Re-throw to let the caller handle the error
+    }
+  }
+
+  AndroidNotificationSound? _getNotificationSound(String sound) {
+    switch (sound) {
+      case 'soft_chime':
+        return const RawResourceAndroidNotificationSound('soft_chime');
+      case 'bell':
+        return const RawResourceAndroidNotificationSound('bell');
+      case 'alarm':
+        return const RawResourceAndroidNotificationSound('alarm');
+      case 'urgent':
+        return const RawResourceAndroidNotificationSound('urgent');
+      case 'medical':
+        return const RawResourceAndroidNotificationSound('medical');
+      default:
+        return null; // Use default system sound
+    }
   }
 
   Future<void> cancelMedicationNotifications(int medicationId) async {

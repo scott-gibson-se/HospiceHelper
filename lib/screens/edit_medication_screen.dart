@@ -279,11 +279,59 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           const SnackBar(content: Text('Medication updated successfully')),
         );
       }).catchError((error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating medication: $error')),
-        );
+        String errorMessage = error.toString();
+        
+        // Check if it's a notification error and offer to save without notifications
+        if (errorMessage.contains('Failed to set up notifications')) {
+          _showNotificationErrorDialog(updatedMedication);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error updating medication: $error')),
+          );
+        }
       });
     }
+  }
+
+  void _showNotificationErrorDialog(Medication medication) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notification Setup Failed'),
+        content: const Text(
+          'There was an error setting up notifications for this medication. '
+          'Would you like to save the medication without notifications?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Save medication without notifications
+              final medicationWithoutNotifications = medication.copyWith(
+                notificationsEnabled: false,
+              );
+              
+              context.read<MedicationProvider>().updateMedication(medicationWithoutNotifications).then((_) {
+                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Close edit medication screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Medication updated without notifications')),
+                );
+              }).catchError((error) {
+                Navigator.pop(context); // Close dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error updating medication: $error')),
+                );
+              });
+            },
+            child: const Text('Save Without Notifications'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showDeleteDialog(BuildContext context) {

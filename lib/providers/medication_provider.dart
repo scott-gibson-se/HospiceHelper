@@ -41,15 +41,22 @@ class MedicationProvider with ChangeNotifier {
 
   Future<void> addMedication(Medication medication) async {
     try {
+      // First, try to schedule notification if enabled
+      if (medication.notificationsEnabled) {
+        try {
+          await _notificationService.scheduleMedicationNotification(medication);
+        } catch (e) {
+          debugPrint('Error setting up notifications: $e');
+          // If notification setup fails, ask user if they want to continue without notifications
+          throw Exception('Failed to set up notifications: $e. Would you like to save the medication without notifications?');
+        }
+      }
+
+      // If notifications are disabled or setup succeeded, save the medication
       final id = await _databaseHelper.insertMedication(medication);
       final newMedication = medication.copyWith(id: id);
       _medications.add(newMedication);
       notifyListeners();
-
-      // Schedule notification if enabled
-      if (medication.notificationsEnabled) {
-        await _notificationService.scheduleMedicationNotification(newMedication);
-      }
     } catch (e) {
       debugPrint('Error adding medication: $e');
       rethrow;
@@ -58,18 +65,26 @@ class MedicationProvider with ChangeNotifier {
 
   Future<void> updateMedication(Medication medication) async {
     try {
+      // First, try to update notifications if enabled
+      if (medication.notificationsEnabled) {
+        try {
+          await _notificationService.scheduleMedicationNotification(medication);
+        } catch (e) {
+          debugPrint('Error setting up notifications: $e');
+          // If notification setup fails, ask user if they want to continue without notifications
+          throw Exception('Failed to set up notifications: $e. Would you like to save the medication without notifications?');
+        }
+      } else {
+        // Cancel existing notifications if disabled
+        await _notificationService.cancelMedicationNotifications(medication.id!);
+      }
+
+      // If notifications are disabled or setup succeeded, update the medication
       await _databaseHelper.updateMedication(medication);
       final index = _medications.indexWhere((m) => m.id == medication.id);
       if (index != -1) {
         _medications[index] = medication;
         notifyListeners();
-      }
-
-      // Update notification
-      if (medication.notificationsEnabled) {
-        await _notificationService.scheduleMedicationNotification(medication);
-      } else {
-        await _notificationService.cancelMedicationNotifications(medication.id!);
       }
     } catch (e) {
       debugPrint('Error updating medication: $e');
