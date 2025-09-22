@@ -110,12 +110,6 @@ class NotificationService {
         return const RawResourceAndroidNotificationSound('soft_chime');
       case 'bell':
         return const RawResourceAndroidNotificationSound('bell');
-      case 'alarm':
-        return const RawResourceAndroidNotificationSound('alarm');
-      case 'urgent':
-        return const RawResourceAndroidNotificationSound('urgent');
-      case 'medical':
-        return const RawResourceAndroidNotificationSound('medical');
       default:
         return null; // Use default system sound
     }
@@ -139,9 +133,6 @@ class NotificationService {
       'gentle',
       'soft_chime',
       'bell',
-      'alarm',
-      'urgent',
-      'medical',
     ];
   }
 
@@ -149,17 +140,11 @@ class NotificationService {
   static String getSoundDescription(String sound) {
     switch (sound) {
       case 'gentle':
-        return 'Gentle chime (benign)';
+        return 'Gentle chime (system default)';
       case 'soft_chime':
         return 'Soft chime (calm)';
       case 'bell':
         return 'Bell tone (moderate)';
-      case 'alarm':
-        return 'Alarm sound (attention-getting)';
-      case 'urgent':
-        return 'Urgent tone (very attention-getting)';
-      case 'medical':
-        return 'Medical alert (maximum attention)';
       default:
         return 'Unknown sound';
     }
