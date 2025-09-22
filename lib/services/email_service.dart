@@ -6,6 +6,25 @@ import '../models/medication.dart';
 import '../models/dose_log.dart';
 
 class EmailService {
+  /// Gets the accessible Downloads directory path
+  static Future<String> _getAccessibleDownloadsPath() async {
+    final directory = await getExternalStorageDirectory();
+    if (directory == null) {
+      throw Exception('External storage not available');
+    }
+    
+    // Use the external storage root path that's accessible to other apps
+    final externalStoragePath = directory.path.split('/Android')[0];
+    final downloadsPath = '$externalStoragePath/Download';
+    
+    // Create Downloads directory if it doesn't exist
+    final downloadsDir = Directory(downloadsPath);
+    if (!await downloadsDir.exists()) {
+      await downloadsDir.create(recursive: true);
+    }
+    
+    return downloadsPath;
+  }
   static Future<void> sendMedicationReport(
     List<Medication> medications,
     List<DoseLog> doseLogs,
@@ -15,17 +34,27 @@ class EmailService {
       // Generate PDF report
       final pdf = await PdfService.generateMedicationReport(medications, doseLogs);
       
-      // Save PDF to temporary directory
-      final directory = await getTemporaryDirectory();
-      final file = File('${directory.path}/medication_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      // Save to accessible Downloads directory
+      final downloadsPath = await _getAccessibleDownloadsPath();
+      final fileName = 'Hospice_Medication_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File('$downloadsPath/$fileName');
       await file.writeAsBytes(await pdf.save());
 
-      // Create email subject and body
+      // Create email subject and body with file location information
       final subject = 'Hospice Medication Report - ${DateTime.now().toString().split(' ')[0]}';
       final body = '''
 Dear Caregiver,
 
-Please find attached the medication report for the hospice patient.
+Please find the medication report for the hospice patient.
+
+IMPORTANT: The PDF report has been saved to your device at:
+${file.path}
+
+To attach this report to your email:
+1. Open your email app
+2. Create a new email to $recipientEmail
+3. Use the "Attach" or "Paperclip" button
+4. Navigate to the file location above and select the PDF
 
 This report includes:
 - Current medication list with dosages and timing
@@ -35,10 +64,10 @@ This report includes:
 If you have any questions about this report, please contact the healthcare team.
 
 Best regards,
-Hospice Medication Tracker
+Hospice Helper
       ''';
 
-      // Create email URI
+      // Create email URI with file location information
       final Uri emailUri = Uri(
         scheme: 'mailto',
         path: recipientEmail,
@@ -53,6 +82,27 @@ Hospice Medication Tracker
       }
     } catch (e) {
       throw Exception('Failed to send email: $e');
+    }
+  }
+
+  /// Generates a PDF report and returns the file path for manual sharing
+  static Future<String> generateMedicationReportFile(
+    List<Medication> medications,
+    List<DoseLog> doseLogs,
+  ) async {
+    try {
+      // Generate PDF report
+      final pdf = await PdfService.generateMedicationReport(medications, doseLogs);
+      
+      // Save to accessible Downloads directory
+      final downloadsPath = await _getAccessibleDownloadsPath();
+      final fileName = 'Hospice_Medication_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File('$downloadsPath/$fileName');
+      await file.writeAsBytes(await pdf.save());
+
+      return file.path;
+    } catch (e) {
+      throw Exception('Failed to generate PDF report: $e');
     }
   }
 
