@@ -7,8 +7,9 @@ import '../models/dose_log.dart';
 class PdfService {
   static Future<pw.Document> generateMedicationReport(
     List<Medication> medications,
-    List<DoseLog> doseLogs,
-  ) async {
+    List<DoseLog> doseLogs, {
+    String? patientName,
+  }) async {
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -17,7 +18,7 @@ class PdfService {
         margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
           return [
-            _buildHeader(),
+            _buildHeader(patientName),
             pw.SizedBox(height: 20),
             _buildMedicationSummary(medications),
             pw.SizedBox(height: 20),
@@ -30,7 +31,7 @@ class PdfService {
     return pdf;
   }
 
-  static pw.Widget _buildHeader() {
+  static pw.Widget _buildHeader(String? patientName) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -41,6 +42,17 @@ class PdfService {
             fontWeight: pw.FontWeight.bold,
           ),
         ),
+        if (patientName != null && patientName.isNotEmpty) ...[
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Patient: $patientName',
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.blue800,
+            ),
+          ),
+        ],
         pw.SizedBox(height: 8),
         pw.Text(
           'Generated on: ${DateFormat('MMMM dd, yyyy - hh:mm a').format(DateTime.now())}',

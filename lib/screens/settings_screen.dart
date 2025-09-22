@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/medication_provider.dart';
 import '../services/email_service.dart';
-import '../services/pdf_service.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import '../services/settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,11 +13,26 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _emailController = TextEditingController();
+  final _patientNameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
+    _patientNameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final patientName = await SettingsService.getPatientName();
+    if (patientName != null) {
+      _patientNameController.text = patientName;
+    }
   }
 
   @override
@@ -32,6 +45,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Patient Information',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _patientNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Patient Name',
+                      hintText: 'Enter the patient\'s name',
+                      prefixIcon: Icon(Icons.person),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) async {
+                      if (value.trim().isNotEmpty) {
+                        await SettingsService.setPatientName(value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This name will be included in all generated reports.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -118,6 +168,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _generatePdfReport() async {
     try {
+      // Check if patient name is set
+      final isPatientNameSet = await SettingsService.isPatientNameSet();
+      if (!isPatientNameSet) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please set the patient name in settings before generating a report'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       final provider = context.read<MedicationProvider>();
       final medications = provider.medications;
       final doseLogs = provider.doseLogs;
@@ -138,19 +200,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
-      final pdf = await PdfService.generateMedicationReport(medications, doseLogs);
-      
-      // Save PDF to downloads directory
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/medication_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(await pdf.save());
+      // Use EmailService to save PDF to accessible Downloads directory
+      final filePath = await EmailService.generateMedicationReportFile(medications, doseLogs);
 
       // Close loading dialog
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('PDF report saved to: ${file.path}'),
+          content: Text('PDF report saved to: $filePath'),
           action: SnackBarAction(
             label: 'Open',
             onPressed: () {
@@ -211,6 +269,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _sendEmailReport(String email) async {
     try {
+      // Check if patient name is set
+      final isPatientNameSet = await SettingsService.isPatientNameSet();
+      if (!isPatientNameSet) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please set the patient name in settings before sending a report'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       final provider = context.read<MedicationProvider>();
       final medications = provider.medications;
       final doseLogs = provider.doseLogs;

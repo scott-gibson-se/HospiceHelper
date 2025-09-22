@@ -4,6 +4,7 @@ import 'dart:io';
 import 'pdf_service.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
+import 'settings_service.dart';
 
 class EmailService {
   /// Gets the accessible Downloads directory path
@@ -31,8 +32,11 @@ class EmailService {
     String recipientEmail,
   ) async {
     try {
+      // Get patient name from settings
+      final patientName = await SettingsService.getPatientName();
+      
       // Generate PDF report
-      final pdf = await PdfService.generateMedicationReport(medications, doseLogs);
+      final pdf = await PdfService.generateMedicationReport(medications, doseLogs, patientName: patientName);
       
       // Save to accessible Downloads directory
       final downloadsPath = await _getAccessibleDownloadsPath();
@@ -91,8 +95,11 @@ Hospice Helper
     List<DoseLog> doseLogs,
   ) async {
     try {
+      // Get patient name from settings
+      final patientName = await SettingsService.getPatientName();
+      
       // Generate PDF report
-      final pdf = await PdfService.generateMedicationReport(medications, doseLogs);
+      final pdf = await PdfService.generateMedicationReport(medications, doseLogs, patientName: patientName);
       
       // Save to accessible Downloads directory
       final downloadsPath = await _getAccessibleDownloadsPath();
