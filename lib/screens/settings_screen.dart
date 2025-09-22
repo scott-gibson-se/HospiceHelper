@@ -272,6 +272,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await provider.deleteMedication(medication.id!);
       }
       
+      // Navigate back to home screen
+      Navigator.pop(context);
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All data cleared successfully')),
       );

@@ -352,6 +352,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
               context.read<MedicationProvider>().deleteMedication(widget.medication.id!).then((_) {
                 Navigator.pop(context); // Close dialog
                 Navigator.pop(context); // Close edit screen
+                Navigator.pop(context); // Go back to home screen
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Medication deleted successfully')),
                 );
