@@ -25,7 +25,7 @@ class HospiceMedsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => QuestionProvider()),
       ],
       child: MaterialApp(
-        title: 'Hospice Medication Tracker',
+        title: 'Hospice Helper',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.blue,
