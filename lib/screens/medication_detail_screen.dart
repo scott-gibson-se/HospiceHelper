@@ -298,75 +298,141 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
     final doseController = TextEditingController();
     final givenByController = TextEditingController();
     final noteController = TextEditingController();
+    DateTime selectedDateTime = DateTime.now();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Log Dose - ${medication.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: doseController,
-              decoration: InputDecoration(
-                labelText: 'Dose Given',
-                hintText: 'Enter amount',
-                suffixText: medication.form,
-              ),
-              keyboardType: TextInputType.number,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Log Dose - ${medication.name}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: doseController,
+                  decoration: InputDecoration(
+                    labelText: 'Dose Given',
+                    hintText: 'Enter amount',
+                    suffixText: medication.form,
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: givenByController,
+                  decoration: const InputDecoration(
+                    labelText: 'Given By',
+                    hintText: 'Who administered the dose?',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Date and Time Selection
+                Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        title: const Text('Date'),
+                        subtitle: Text(
+                          '${selectedDateTime.day}/${selectedDateTime.month}/${selectedDateTime.year}',
+                        ),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDateTime,
+                            firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                            lastDate: DateTime.now().add(const Duration(days: 1)),
+                          );
+                          if (date != null) {
+                            setState(() {
+                              selectedDateTime = DateTime(
+                                date.year,
+                                date.month,
+                                date.day,
+                                selectedDateTime.hour,
+                                selectedDateTime.minute,
+                              );
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ListTile(
+                        title: const Text('Time'),
+                        subtitle: Text(
+                          '${selectedDateTime.hour.toString().padLeft(2, '0')}:${selectedDateTime.minute.toString().padLeft(2, '0')}',
+                        ),
+                        trailing: const Icon(Icons.access_time),
+                        onTap: () async {
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(selectedDateTime),
+                          );
+                          if (time != null) {
+                            setState(() {
+                              selectedDateTime = DateTime(
+                                selectedDateTime.year,
+                                selectedDateTime.month,
+                                selectedDateTime.day,
+                                time.hour,
+                                time.minute,
+                              );
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (Optional)',
+                    hintText: 'Any additional notes...',
+                  ),
+                  maxLines: 2,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: givenByController,
-              decoration: const InputDecoration(
-                labelText: 'Given By',
-                hintText: 'Who administered the dose?',
-              ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(
-                labelText: 'Note (Optional)',
-                hintText: 'Any additional notes...',
-              ),
-              maxLines: 2,
+            ElevatedButton(
+              onPressed: () {
+                final dose = double.tryParse(doseController.text);
+                if (dose != null && dose > 0 && givenByController.text.isNotEmpty) {
+                  context.read<MedicationProvider>().logDose(
+                    DoseLog(
+                      medicationId: medication.id!,
+                      dateTime: selectedDateTime,
+                      doseGiven: dose,
+                      givenBy: givenByController.text,
+                      note: noteController.text.isNotEmpty ? noteController.text : null,
+                      createdAt: DateTime.now(),
+                    ),
+                  );
+                  Navigator.pop(context);
+                  _loadDoseLogs(); // Refresh the dose logs
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Dose logged successfully')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter valid dose and who gave it')),
+                  );
+                }
+              },
+              child: const Text('Log Dose'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final dose = double.tryParse(doseController.text);
-              if (dose != null && dose > 0 && givenByController.text.isNotEmpty) {
-                context.read<MedicationProvider>().logDose(
-                  DoseLog(
-                    medicationId: medication.id!,
-                    dateTime: DateTime.now(),
-                    doseGiven: dose,
-                    givenBy: givenByController.text,
-                    note: noteController.text.isNotEmpty ? noteController.text : null,
-                    createdAt: DateTime.now(),
-                  ),
-                );
-                Navigator.pop(context);
-                _loadDoseLogs(); // Refresh the dose logs
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Dose logged successfully')),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter valid dose and who gave it')),
-                );
-              }
-            },
-            child: const Text('Log Dose'),
-          ),
-        ],
       ),
     );
   }

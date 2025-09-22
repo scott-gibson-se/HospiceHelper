@@ -143,6 +143,16 @@ class DatabaseHelper {
     return null;
   }
 
+  Future<int> updateDoseLog(DoseLog doseLog) async {
+    final db = await database;
+    return await db.update(
+      'dose_logs',
+      doseLog.toMap(),
+      where: 'id = ?',
+      whereArgs: [doseLog.id],
+    );
+  }
+
   Future<int> deleteDoseLog(int id) async {
     final db = await database;
     return await db.delete(

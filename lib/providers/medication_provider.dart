@@ -152,6 +152,20 @@ class MedicationProvider with ChangeNotifier {
     }
   }
 
+  Future<void> updateDoseLog(DoseLog doseLog) async {
+    try {
+      await _databaseHelper.updateDoseLog(doseLog);
+      final index = _doseLogs.indexWhere((d) => d.id == doseLog.id);
+      if (index != -1) {
+        _doseLogs[index] = doseLog;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error updating dose log: $e');
+      rethrow;
+    }
+  }
+
   Future<void> deleteDoseLog(int doseLogId) async {
     try {
       await _databaseHelper.deleteDoseLog(doseLogId);
