@@ -44,7 +44,14 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
     }
 
     try {
-      final updatedNote = widget.note.copyWith(
+      // Resolve latest note from provider before saving
+      final provider = context.read<NoteProvider>();
+      final current = provider.notes.firstWhere(
+        (n) => n.id == widget.note.id,
+        orElse: () => widget.note,
+      );
+
+      final updatedNote = current.copyWith(
         title: _titleController.text.trim(),
         body: _bodyController.text.trim(),
         updatedAt: DateTime.now(),
@@ -123,6 +130,13 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch for live updates
+    final provider = context.watch<NoteProvider>();
+    final current = provider.notes.firstWhere(
+      (n) => n.id == widget.note.id,
+      orElse: () => widget.note,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Note Details'),
@@ -132,6 +146,9 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
             IconButton(
               onPressed: () {
                 setState(() {
+                  // sync controllers from latest provider value
+                  _titleController.text = current.title;
+                  _bodyController.text = current.body;
                   _isEditing = true;
                 });
               },
@@ -197,7 +214,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
                       )
                     else
                       Text(
-                        widget.note.title,
+                        current.title,
                         style: const TextStyle(fontSize: 18),
                       ),
                   ],
@@ -241,7 +258,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
                       )
                     else
                       Text(
-                        widget.note.body,
+                        current.body,
                         style: const TextStyle(fontSize: 16),
                       ),
                   ],
@@ -275,12 +292,12 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Created: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(widget.note.createdAt)}',
+                      'Created: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.createdAt)}',
                       style: const TextStyle(fontSize: 14),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Updated: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(widget.note.updatedAt)}',
+                      'Updated: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.updatedAt)}',
                       style: const TextStyle(fontSize: 14),
                     ),
                   ],
@@ -298,8 +315,9 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
                     onPressed: () {
                       setState(() {
                         _isEditing = false;
-                        _titleController.text = widget.note.title;
-                        _bodyController.text = widget.note.body;
+                        // reset controllers to latest provider value
+                        _titleController.text = current.title;
+                        _bodyController.text = current.body;
                       });
                     },
                     child: const Text('Cancel'),

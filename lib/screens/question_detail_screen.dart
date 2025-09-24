@@ -14,26 +14,58 @@ class QuestionDetailScreen extends StatefulWidget {
 }
 
 class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
+  late TextEditingController _titleController;
+  late TextEditingController _questionTextController;
   late TextEditingController _answerController;
+  late DateTime _dateEntered;
   bool _isEditing = false;
 
   @override
   void initState() {
     super.initState();
+    _titleController = TextEditingController(text: widget.question.title);
+    _questionTextController = TextEditingController(text: widget.question.questionText);
     _answerController = TextEditingController(text: widget.question.answer ?? '');
+    _dateEntered = widget.question.dateEntered;
   }
 
   @override
   void dispose() {
+    _titleController.dispose();
+    _questionTextController.dispose();
     _answerController.dispose();
     super.dispose();
   }
 
-  Future<void> _saveAnswer() async {
-    if (_answerController.text.trim().isEmpty) {
+  Future<void> _pickDateTime() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _dateEntered,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (pickedDate == null) return;
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_dateEntered),
+    );
+    if (pickedTime == null) return;
+    setState(() {
+      _dateEntered = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
+  }
+
+  Future<void> _saveAllChanges(Question current) async {
+    if (_titleController.text.trim().isEmpty || _questionTextController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter an answer'),
+          content: Text('Please fill in title and question text'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -41,19 +73,25 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
 
     try {
-      await context.read<QuestionProvider>().answerQuestion(
-        widget.question.id!,
-        _answerController.text.trim(),
+      final String answerText = _answerController.text.trim();
+      final updated = current.copyWith(
+        title: _titleController.text.trim(),
+        questionText: _questionTextController.text.trim(),
+        dateEntered: _dateEntered,
+        answer: answerText.isEmpty ? null : answerText,
+        answeredAt: answerText.isEmpty ? null : (current.answeredAt ?? DateTime.now()),
+        updatedAt: DateTime.now(),
       );
-      
+      await context.read<QuestionProvider>().updateQuestion(updated);
+
       setState(() {
         _isEditing = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Answer saved successfully'),
+            content: Text('Question updated'),
             backgroundColor: Colors.green,
           ),
         );
@@ -62,7 +100,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving answer: $e'),
+            content: Text('Error saving changes: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -117,19 +155,37 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<QuestionProvider>();
+    final Question current = provider.questions.firstWhere(
+      (q) => q.id == widget.question.id,
+      orElse: () => widget.question,
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Question Details'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          if (!widget.question.isAnswered)
+          IconButton(
+            onPressed: () {
+              setState(() {
+                if (!_isEditing) {
+                  // sync controllers from latest provider value
+                  _titleController.text = current.title;
+                  _questionTextController.text = current.questionText;
+                  _answerController.text = current.answer ?? '';
+                  _dateEntered = current.dateEntered;
+                }
+                _isEditing = !_isEditing;
+              });
+            },
+            icon: Icon(_isEditing ? Icons.close : Icons.edit),
+            tooltip: _isEditing ? 'Cancel' : 'Edit',
+          ),
+          if (_isEditing)
             IconButton(
-              onPressed: () {
-                setState(() {
-                  _isEditing = !_isEditing;
-                });
-              },
-              icon: Icon(_isEditing ? Icons.close : Icons.edit),
+              onPressed: () => _saveAllChanges(current),
+              icon: const Icon(Icons.save),
+              tooltip: 'Save',
             ),
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -181,10 +237,19 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      widget.question.title,
-                      style: const TextStyle(fontSize: 18),
-                    ),
+                    if (_isEditing)
+                      TextField(
+                        controller: _titleController,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter question title',
+                          border: OutlineInputBorder(),
+                        ),
+                      )
+                    else
+                      Text(
+                        current.title,
+                        style: const TextStyle(fontSize: 18),
+                      ),
                   ],
                 ),
               ),
@@ -215,10 +280,20 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      widget.question.questionText,
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    if (_isEditing)
+                      TextField(
+                        controller: _questionTextController,
+                        maxLines: null,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter the question text',
+                          border: OutlineInputBorder(),
+                        ),
+                      )
+                    else
+                      Text(
+                        current.questionText,
+                        style: const TextStyle(fontSize: 16),
+                      ),
                   ],
                 ),
               ),
@@ -249,10 +324,28 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(widget.question.dateEntered),
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    if (_isEditing)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(_dateEntered),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: _pickDateTime,
+                            icon: const Icon(Icons.edit_calendar),
+                            label: const Text('Change'),
+                          )
+                        ],
+                      )
+                    else
+                      Text(
+                        DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.dateEntered),
+                        style: const TextStyle(fontSize: 16),
+                      ),
                   ],
                 ),
               ),
@@ -284,17 +377,17 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: widget.question.isAnswered 
+                            color: current.isAnswered 
                                 ? Colors.green.shade100 
                                 : Colors.orange.shade100,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            widget.question.status,
+                            current.status,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: widget.question.isAnswered 
+                              color: current.isAnswered 
                                   ? Colors.green.shade700 
                                   : Colors.orange.shade700,
                             ),
@@ -315,24 +408,13 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                             maxLines: 5,
                           ),
                           const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _isEditing = false;
-                                    _answerController.text = widget.question.answer ?? '';
-                                  });
-                                },
-                                child: const Text('Cancel'),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: _saveAnswer,
-                                child: const Text('Save Answer'),
-                              ),
-                            ],
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _saveAllChanges(current),
+                              icon: const Icon(Icons.save),
+                              label: const Text('Save Changes'),
+                            ),
                           ),
                         ],
                       )
@@ -340,14 +422,14 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (widget.question.isAnswered) ...[
+                          if (current.isAnswered) ...[
                             Text(
-                              widget.question.answer!,
+                              current.answer!,
                               style: const TextStyle(fontSize: 16),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Answered on: ${DateFormat('MMM dd, yyyy - HH:mm').format(widget.question.answeredAt!)}',
+                              'Answered on: ${DateFormat('MMM dd, yyyy - HH:mm').format(current.answeredAt!)}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade600,
