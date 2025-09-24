@@ -36,6 +36,17 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
     });
   }
 
+  double _getTotalDosesInLastInterval() {
+    if (_doseLogs.isEmpty) return 0.0;
+    
+    final now = DateTime.now();
+    final intervalStart = now.subtract(Duration(minutes: widget.medication.minTimeBetweenDoses));
+    
+    return _doseLogs
+        .where((log) => log.dateTime.isAfter(intervalStart))
+        .fold(0.0, (sum, log) => sum + log.doseGiven);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,6 +159,14 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      Text(
+                        'Total doses in last ${widget.medication.formattedTimeInterval}: ${_getTotalDosesInLastInterval().toStringAsFixed(3)} ${widget.medication.form}',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
