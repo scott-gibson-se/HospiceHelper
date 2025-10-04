@@ -21,7 +21,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _minTimeMinutesController = TextEditingController();
 
   bool _notificationsEnabled = false;
-  String _selectedSound = 'gentle';
 
   final List<String> _medicationForms = [
     'Tablet',
@@ -224,27 +223,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                         });
                       },
                     ),
-                    if (_notificationsEnabled) ...[
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _selectedSound,
-                        decoration: const InputDecoration(
-                          labelText: 'Notification Sound',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: NotificationService.getAvailableSounds().map((String sound) {
-                          return DropdownMenuItem<String>(
-                            value: sound,
-                            child: Text(NotificationService.getSoundDescription(sound)),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedSound = newValue ?? 'gentle';
-                          });
-                        },
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -286,7 +264,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         maxDosage: double.parse(_maxDosageController.text),
         minTimeBetweenDoses: Medication.fromHoursAndMinutes(hours, minutes),
         notificationsEnabled: _notificationsEnabled,
-        notificationSound: _selectedSound,
         createdAt: DateTime.now(),
       );
 
@@ -314,15 +291,29 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Notification Setup Failed'),
+        title: const Text('Notification Permission Required'),
         content: const Text(
-          'There was an error setting up notifications for this medication. '
-          'Would you like to save the medication without notifications?',
+          'This app needs notification permission to send medication reminders. '
+          'Please enable notifications in your device settings, or save the medication without notifications.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Open app settings to enable notifications
+              // Note: This would need to be implemented with a proper settings opener
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please enable notifications in your device settings'),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            },
+            child: const Text('Open Settings'),
           ),
           ElevatedButton(
             onPressed: () {

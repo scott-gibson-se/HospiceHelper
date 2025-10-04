@@ -26,7 +26,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   late TextEditingController _minTimeMinutesController;
 
   late bool _notificationsEnabled;
-  late String _selectedSound;
 
   final List<String> _medicationForms = [
     'Tablet',
@@ -52,7 +51,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     _minTimeMinutesController = TextEditingController(text: widget.medication.minutes.toString());
     
     _notificationsEnabled = widget.medication.notificationsEnabled;
-    _selectedSound = widget.medication.notificationSound;
   }
 
   @override
@@ -250,27 +248,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                         });
                       },
                     ),
-                    if (_notificationsEnabled) ...[
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _selectedSound,
-                        decoration: const InputDecoration(
-                          labelText: 'Notification Sound',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: NotificationService.getAvailableSounds().map((String sound) {
-                          return DropdownMenuItem<String>(
-                            value: sound,
-                            child: Text(NotificationService.getSoundDescription(sound)),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedSound = newValue ?? 'gentle';
-                          });
-                        },
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -319,7 +296,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         maxDosage: double.parse(_maxDosageController.text),
         minTimeBetweenDoses: Medication.fromHoursAndMinutes(hours, minutes),
         notificationsEnabled: _notificationsEnabled,
-        notificationSound: _selectedSound,
         updatedAt: DateTime.now(),
       );
 
@@ -347,15 +323,28 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Notification Setup Failed'),
+        title: const Text('Notification Permission Required'),
         content: const Text(
-          'There was an error setting up notifications for this medication. '
-          'Would you like to save the medication without notifications?',
+          'This app needs notification permission to send medication reminders. '
+          'Please enable notifications in your device settings, or save the medication without notifications.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Open app settings to enable notifications
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please enable notifications in your device settings'),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            },
+            child: const Text('Open Settings'),
           ),
           ElevatedButton(
             onPressed: () {

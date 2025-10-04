@@ -41,22 +41,26 @@ class MedicationProvider with ChangeNotifier {
 
   Future<void> addMedication(Medication medication) async {
     try {
-      // First, try to schedule notification if enabled
-      if (medication.notificationsEnabled) {
-        try {
-          await _notificationService.scheduleMedicationNotification(medication);
-        } catch (e) {
-          debugPrint('Error setting up notifications: $e');
-          // If notification setup fails, ask user if they want to continue without notifications
-          throw Exception('Failed to set up notifications: $e. Would you like to save the medication without notifications?');
-        }
-      }
-
-      // If notifications are disabled or setup succeeded, save the medication
+      // First, save the medication to get an ID
       final id = await _databaseHelper.insertMedication(medication);
       final newMedication = medication.copyWith(id: id);
       _medications.add(newMedication);
       notifyListeners();
+
+      // Then, try to schedule notification if enabled
+      if (medication.notificationsEnabled) {
+        debugPrint('Provider: Scheduling notification for ${medication.name}');
+        try {
+          await _notificationService.scheduleMedicationNotification(newMedication);
+          debugPrint('Provider: Notification scheduled successfully for ${medication.name}');
+        } catch (e) {
+          debugPrint('Provider: Error setting up notifications: $e');
+          // If notification setup fails, ask user if they want to continue without notifications
+          throw Exception('Failed to set up notifications: $e. Would you like to save the medication without notifications?');
+        }
+      } else {
+        debugPrint('Provider: Notifications disabled for ${medication.name}');
+      }
     } catch (e) {
       debugPrint('Error adding medication: $e');
       rethrow;
@@ -65,16 +69,24 @@ class MedicationProvider with ChangeNotifier {
 
   Future<void> updateMedication(Medication medication) async {
     try {
+      // Check if medication has an ID
+      if (medication.id == null) {
+        throw Exception('Cannot update medication: medication ID is required');
+      }
+
       // First, try to update notifications if enabled
       if (medication.notificationsEnabled) {
+        debugPrint('Provider: Updating notification for ${medication.name}');
         try {
           await _notificationService.scheduleMedicationNotification(medication);
+          debugPrint('Provider: Notification updated successfully for ${medication.name}');
         } catch (e) {
-          debugPrint('Error setting up notifications: $e');
+          debugPrint('Provider: Error setting up notifications: $e');
           // If notification setup fails, ask user if they want to continue without notifications
           throw Exception('Failed to set up notifications: $e. Would you like to save the medication without notifications?');
         }
       } else {
+        debugPrint('Provider: Cancelling notifications for ${medication.name}');
         // Cancel existing notifications if disabled
         await _notificationService.cancelMedicationNotifications(medication.id!);
       }
@@ -117,7 +129,11 @@ class MedicationProvider with ChangeNotifier {
       // Reschedule notification for next dose
       final medication = _medications.firstWhere((m) => m.id == doseLog.medicationId);
       if (medication.notificationsEnabled) {
+        debugPrint('Provider: Rescheduling notification after dose log for ${medication.name}');
         await _notificationService.scheduleMedicationNotification(medication);
+        debugPrint('Provider: Notification rescheduled successfully for ${medication.name}');
+      } else {
+        debugPrint('Provider: Notifications disabled for ${medication.name} - not rescheduling');
       }
     } catch (e) {
       debugPrint('Error logging dose: $e');

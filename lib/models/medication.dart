@@ -6,7 +6,6 @@ class Medication {
   final double maxDosage;
   final int minTimeBetweenDoses; // in minutes
   final bool notificationsEnabled;
-  final String notificationSound;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -18,7 +17,6 @@ class Medication {
     required this.maxDosage,
     required this.minTimeBetweenDoses,
     this.notificationsEnabled = false,
-    this.notificationSound = 'gentle',
     required this.createdAt,
     this.updatedAt,
   });
@@ -32,7 +30,6 @@ class Medication {
       'max_dosage': maxDosage,
       'min_time_between_doses': minTimeBetweenDoses,
       'notifications_enabled': notificationsEnabled ? 1 : 0,
-      'notification_sound': notificationSound,
       'created_at': createdAt.millisecondsSinceEpoch,
       'updated_at': updatedAt?.millisecondsSinceEpoch,
     };
@@ -47,7 +44,6 @@ class Medication {
       maxDosage: map['max_dosage'],
       minTimeBetweenDoses: map['min_time_between_doses'],
       notificationsEnabled: map['notifications_enabled'] == 1,
-      notificationSound: map['notification_sound'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at']),
       updatedAt: map['updated_at'] != null 
           ? DateTime.fromMillisecondsSinceEpoch(map['updated_at'])
@@ -63,7 +59,6 @@ class Medication {
     double? maxDosage,
     int? minTimeBetweenDoses,
     bool? notificationsEnabled,
-    String? notificationSound,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -75,7 +70,6 @@ class Medication {
       maxDosage: maxDosage ?? this.maxDosage,
       minTimeBetweenDoses: minTimeBetweenDoses ?? this.minTimeBetweenDoses,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
-      notificationSound: notificationSound ?? this.notificationSound,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

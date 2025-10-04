@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
   static const String _patientNameKey = 'patient_name';
+  static const String _notificationSoundKey = 'notification_sound';
 
   /// Gets the patient name from shared preferences
   static Future<String?> getPatientName() async {
@@ -25,5 +26,17 @@ class SettingsService {
   static Future<bool> clearPatientName() async {
     final prefs = await SharedPreferences.getInstance();
     return await prefs.remove(_patientNameKey);
+  }
+
+  /// Gets the global notification sound setting
+  static Future<String> getNotificationSound() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_notificationSoundKey) ?? 'gentle'; // Default to gentle
+  }
+
+  /// Sets the global notification sound setting
+  static Future<bool> setNotificationSound(String sound) async {
+    final prefs = await SharedPreferences.getInstance();
+    return await prefs.setString(_notificationSoundKey, sound);
   }
 }

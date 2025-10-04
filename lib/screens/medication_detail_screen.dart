@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../providers/medication_provider.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
-import '../services/notification_service.dart';
 import 'edit_medication_screen.dart';
 
 class MedicationDetailScreen extends StatefulWidget {
@@ -36,11 +35,23 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
     });
   }
 
-  double _getTotalDosesInLastInterval() {
+  Future<void> _testNotification(BuildContext context, Medication medication) async {
+    // Test notification functionality removed - notifications use system default sound
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Test notification removed. Notifications use system default sound.'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    }
+  }
+
+  double _getTotalDosesInLastInterval(Medication medication) {
     if (_doseLogs.isEmpty) return 0.0;
     
     final now = DateTime.now();
-    final intervalStart = now.subtract(Duration(minutes: widget.medication.minTimeBetweenDoses));
+    final intervalStart = now.subtract(Duration(minutes: medication.minTimeBetweenDoses));
     
     return _doseLogs
         .where((log) => log.dateTime.isAfter(intervalStart))
@@ -51,21 +62,31 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.medication.name),
+        title: Consumer<MedicationProvider>(
+          builder: (context, provider, child) {
+            final currentMedication = provider.medications.firstWhere(
+              (med) => med.id == widget.medication.id,
+              orElse: () => widget.medication,
+            );
+            return Text(currentMedication.name);
+          },
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => EditMedicationScreen(medication: widget.medication),
                 ),
-              ).then((_) {
-                // Refresh the medication data
+              );
+              // Refresh the medication data and dose logs
+              if (mounted) {
                 setState(() {});
-              });
+                await _loadDoseLogs();
+              }
             },
             tooltip: 'Edit Medication',
           ),
@@ -73,8 +94,14 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
       ),
       body: Consumer<MedicationProvider>(
         builder: (context, provider, child) {
-          final isDue = provider.isMedicationDue(widget.medication);
-          final timeUntilNext = provider.getTimeUntilNextDose(widget.medication);
+          // Get the current medication from the provider
+          final currentMedication = provider.medications.firstWhere(
+            (med) => med.id == widget.medication.id,
+            orElse: () => widget.medication,
+          );
+          
+          final isDue = provider.isMedicationDue(currentMedication);
+          final timeUntilNext = provider.getTimeUntilNextDose(currentMedication);
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -99,11 +126,11 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  widget.medication.name,
+                                  currentMedication.name,
                                   style: Theme.of(context).textTheme.headlineSmall,
                                 ),
                                 Text(
-                                  widget.medication.officialName,
+                                  currentMedication.officialName,
                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: Colors.grey[600],
                                   ),
@@ -114,12 +141,10 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      _buildInfoRow('Form', widget.medication.form),
-                      _buildInfoRow('Max Dosage', '${widget.medication.maxDosage} ${widget.medication.form}'),
-                      _buildInfoRow('Min Time Between Doses', widget.medication.formattedTimeInterval),
-                      _buildInfoRow('Notifications', widget.medication.notificationsEnabled ? 'Enabled' : 'Disabled'),
-                      if (widget.medication.notificationsEnabled)
-                        _buildInfoRow('Notification Sound', NotificationService.getSoundDescription(widget.medication.notificationSound)),
+                      _buildInfoRow('Form', currentMedication.form),
+                      _buildInfoRow('Max Dosage', '${currentMedication.maxDosage} ${currentMedication.form}'),
+                      _buildInfoRow('Min Time Between Doses', currentMedication.formattedTimeInterval),
+                      _buildInfoRow('Notifications', currentMedication.notificationsEnabled ? 'Enabled' : 'Disabled'),
                     ],
                   ),
                 ),
@@ -161,7 +186,7 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                       ],
                       const SizedBox(height: 8),
                       Text(
-                        'Total doses in last ${widget.medication.formattedTimeInterval}: ${_getTotalDosesInLastInterval().toStringAsFixed(3)} ${widget.medication.form}',
+                        'Total doses in last ${currentMedication.formattedTimeInterval}: ${_getTotalDosesInLastInterval(currentMedication).toStringAsFixed(3)} ${currentMedication.form}',
                         style: TextStyle(
                           color: Colors.grey[700],
                           fontWeight: FontWeight.w500,
@@ -189,11 +214,24 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () => _showLogDoseDialog(context, widget.medication),
+                            onPressed: () => _showLogDoseDialog(context, currentMedication),
                             icon: const Icon(Icons.add_circle),
                             label: const Text('Log Dose'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _testNotification(context, currentMedication),
+                            icon: const Icon(Icons.notifications),
+                            label: const Text('Test Notification'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
                             ),
                           ),
@@ -245,7 +283,7 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                                 backgroundColor: Colors.blue[100],
                                 child: const Icon(Icons.medication, color: Colors.blue),
                               ),
-                              title: Text('${log.doseGiven} ${widget.medication.form}'),
+                              title: Text('${log.doseGiven} ${currentMedication.form}'),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [

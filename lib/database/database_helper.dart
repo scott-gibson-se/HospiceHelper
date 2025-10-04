@@ -23,7 +23,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'hospice_meds.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -40,7 +40,6 @@ class DatabaseHelper {
         max_dosage REAL NOT NULL,
         min_time_between_doses INTEGER NOT NULL,
         notifications_enabled INTEGER NOT NULL DEFAULT 0,
-        notification_sound TEXT NOT NULL DEFAULT 'gentle',
         created_at INTEGER NOT NULL,
         updated_at INTEGER
       )
@@ -113,6 +112,35 @@ class DatabaseHelper {
           updated_at INTEGER NOT NULL
         )
       ''');
+    }
+
+    if (oldVersion < 4) {
+      // Remove notification_sound column for version 4
+      // Create new medications table without notification_sound
+      await db.execute('''
+        CREATE TABLE medications_new(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          official_name TEXT NOT NULL,
+          form TEXT NOT NULL,
+          max_dosage REAL NOT NULL,
+          min_time_between_doses INTEGER NOT NULL,
+          notifications_enabled INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER
+        )
+      ''');
+
+      // Copy data from old table to new table
+      await db.execute('''
+        INSERT INTO medications_new (id, name, official_name, form, max_dosage, min_time_between_doses, notifications_enabled, created_at, updated_at)
+        SELECT id, name, official_name, form, max_dosage, min_time_between_doses, notifications_enabled, created_at, updated_at
+        FROM medications
+      ''');
+
+      // Drop old table and rename new table
+      await db.execute('DROP TABLE medications');
+      await db.execute('ALTER TABLE medications_new RENAME TO medications');
     }
   }
 
