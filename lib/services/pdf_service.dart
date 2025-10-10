@@ -12,17 +12,39 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
 
+    // Add header page
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return _buildHeader(patientName);
+        },
+      ),
+    );
+
+    // Add medication summary page
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return _buildMedicationSummary(medications);
+        },
+      ),
+    );
+
+    // Add dose history with proper pagination
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        maxPages: 100,
         build: (pw.Context context) {
           return [
-            _buildHeader(patientName),
-            pw.SizedBox(height: 20),
-            _buildMedicationSummary(medications),
-            pw.SizedBox(height: 20),
-            _buildDoseHistory(doseLogs, medications),
+            _buildDoseHistoryHeader(),
+            pw.SizedBox(height: 12),
+            _buildDoseHistoryTable(doseLogs, medications),
           ];
         },
       ),
@@ -112,64 +134,66 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildDoseHistory(List<DoseLog> doseLogs, List<Medication> medications) {
+  static pw.Widget _buildDoseHistoryHeader() {
+    return pw.Text(
+      'Dose History',
+      style: pw.TextStyle(
+        fontSize: 18,
+        fontWeight: pw.FontWeight.bold,
+      ),
+    );
+  }
+
+  static pw.Widget _buildDoseHistoryTable(List<DoseLog> doseLogs, List<Medication> medications) {
     final medicationMap = {for (var med in medications) med.id: med};
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'Dose History',
-          style: pw.TextStyle(
-            fontSize: 18,
-            fontWeight: pw.FontWeight.bold,
-          ),
+    if (doseLogs.isEmpty) {
+      return pw.Text(
+        'No doses logged yet',
+        style: pw.TextStyle(
+          fontSize: 12,
+          color: PdfColors.grey600,
         ),
-        pw.SizedBox(height: 12),
-        if (doseLogs.isEmpty)
-          pw.Text(
-            'No doses logged yet',
-            style: pw.TextStyle(
-              fontSize: 12,
-              color: PdfColors.grey600,
-            ),
-          )
-        else
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey300),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(2),
-              1: const pw.FlexColumnWidth(1),
-              2: const pw.FlexColumnWidth(1),
-              3: const pw.FlexColumnWidth(2),
-              4: const pw.FlexColumnWidth(1),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                children: [
-                  _buildTableCell('Medication', isHeader: true),
-                  _buildTableCell('Dose', isHeader: true),
-                  _buildTableCell('Given By', isHeader: true),
-                  _buildTableCell('Date & Time', isHeader: true),
-                  _buildTableCell('Note', isHeader: true),
-                ],
-              ),
-              ...doseLogs.map((log) {
-                final medication = medicationMap[log.medicationId];
-                return pw.TableRow(
-                  children: [
-                    _buildTableCell(medication?.name ?? 'Unknown'),
-                    _buildTableCell('${log.doseGiven} ${medication?.form ?? ''}'),
-                    _buildTableCell(log.givenBy),
-                    _buildTableCell(DateFormat('MMM dd, yyyy\nhh:mm a').format(log.dateTime)),
-                    _buildTableCell(log.note ?? ''),
-                  ],
-                );
-              }),
-            ],
-          ),
-      ],
+      );
+    }
+
+    // Prepare data for Table.fromTextArray
+    final headers = ['Medication', 'Dose', 'Given By', 'Date & Time', 'Note'];
+    final data = doseLogs.map((log) {
+      final medication = medicationMap[log.medicationId];
+      return [
+        medication?.name ?? 'Unknown',
+        '${log.doseGiven} ${medication?.form ?? ''}',
+        log.givenBy,
+        DateFormat('MMM dd, yyyy hh:mm a').format(log.dateTime),
+        log.note ?? '',
+      ];
+    }).toList();
+
+    return pw.Table.fromTextArray(
+      headers: headers,
+      data: data,
+      headerStyle: pw.TextStyle(
+        fontSize: 10,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(
+        color: PdfColors.grey800,
+      ),
+      cellStyle: pw.TextStyle(
+        fontSize: 9,
+      ),
+      cellAlignment: pw.Alignment.centerLeft,
+      cellPadding: const pw.EdgeInsets.all(8),
+      border: pw.TableBorder.all(color: PdfColors.grey300),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(1),
+        2: const pw.FlexColumnWidth(1),
+        3: const pw.FlexColumnWidth(2),
+        4: const pw.FlexColumnWidth(1),
+      },
     );
   }
 

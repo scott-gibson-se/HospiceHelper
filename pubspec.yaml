@@ -40,11 +40,11 @@ dependencies:
   path: ^1.8.3
   
   # Local notifications
-  flutter_local_notifications: ^17.2.2
-  timezone: ^0.9.4
+  flutter_local_notifications: ^19.4.2
+  timezone: ^0.10.0
   
   # PDF generation
-  pdf: ^3.10.7
+  pdf: ^3.11.3
   
   # Email functionality
   url_launcher: ^6.2.5

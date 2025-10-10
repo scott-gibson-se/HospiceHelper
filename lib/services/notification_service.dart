@@ -259,7 +259,6 @@ class NotificationService {
         scheduledTime,
         details,
         androidScheduleMode: scheduleMode,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         payload: 'medication_${medication.id}',
       );
       debugPrint('✅ Notification scheduled successfully for ${medication.name}');
@@ -422,7 +421,6 @@ class NotificationService {
         scheduledTime,
         details,
         androidScheduleMode: scheduleMode,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         payload: 'test_scheduled_notification',
       );
       
