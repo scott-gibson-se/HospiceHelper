@@ -1,6 +1,6 @@
 {
-    "name": "hospice_meds",
-    "short_name": "hospice_meds",
+    "name": "Hospice Helper",
+    "short_name": "Hospice Helper",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
