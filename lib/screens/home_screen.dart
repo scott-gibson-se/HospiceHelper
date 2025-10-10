@@ -24,7 +24,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   late TabController _questionsTabController;
 
@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _questionsTabController.addListener(() {
       setState(() {}); // Rebuild when questions filter tab changes
     });
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MedicationProvider>().loadMedications();
       context.read<MedicationProvider>().loadDoseLogs();
@@ -49,9 +50,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _questionsTabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh medications and dose logs when app becomes active
+      context.read<MedicationProvider>().loadMedications();
+      context.read<MedicationProvider>().loadDoseLogs();
+      context.read<QuestionProvider>().loadQuestions();
+      context.read<NoteProvider>().loadNotes();
+    }
   }
 
   @override
