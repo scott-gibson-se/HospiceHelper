@@ -35,17 +35,6 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
     });
   }
 
-  Future<void> _testNotification(BuildContext context, Medication medication) async {
-    // Test notification functionality removed - notifications use system default sound
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Test notification removed. Notifications use system default sound.'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-    }
-  }
 
   double _getTotalDosesInLastInterval(Medication medication) {
     if (_doseLogs.isEmpty) return 0.0;
@@ -219,19 +208,6 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                             label: const Text('Log Dose'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _testNotification(context, currentMedication),
-                            icon: const Icon(Icons.notifications),
-                            label: const Text('Test Notification'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
                             ),
                           ),
