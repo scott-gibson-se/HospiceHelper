@@ -61,6 +61,7 @@ dependencies:
   
   # Permissions
   permission_handler: ^11.3.1
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
