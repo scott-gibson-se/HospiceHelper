@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -20,11 +21,30 @@ class MedicationDetailScreen extends StatefulWidget {
 
 class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
   List<DoseLog> _doseLogs = [];
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadDoseLogs();
+    _startRefreshTimer();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh state when dependencies change (e.g., medication data updates)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refreshState();
+      }
+    });
   }
 
   Future<void> _loadDoseLogs() async {
@@ -32,6 +52,25 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
     final logs = await provider.getDoseLogsForMedication(widget.medication.id!);
     setState(() {
       _doseLogs = logs;
+    });
+  }
+
+  Future<void> _refreshState() async {
+    // Reload dose logs to get the latest data
+    await _loadDoseLogs();
+    // Force a rebuild to update computed values
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _startRefreshTimer() {
+    // Refresh every minute to update computed values based on time
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) {
+        // Only refresh the computed values, not the dose logs
+        setState(() {});
+      }
     });
   }
 
@@ -73,8 +112,7 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
               );
               // Refresh the medication data and dose logs
               if (mounted) {
-                setState(() {});
-                await _loadDoseLogs();
+                await _refreshState();
               }
             },
             tooltip: 'Edit Medication',
@@ -188,8 +226,15 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
               const SizedBox(height: 16),
 
               // Quick Actions
-              if (isDue)
-                Card(
+              Builder(
+                builder: (context) {
+                  final totalDosesInInterval = _getTotalDosesInLastInterval(currentMedication);
+                  final canLogDose = totalDosesInInterval < currentMedication.maxDosage;
+                  final shouldShowQuickActions = isDue || canLogDose;
+                  
+                  if (!shouldShowQuickActions) return const SizedBox.shrink();
+                  
+                  return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -200,22 +245,58 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _showLogDoseDialog(context, currentMedication),
-                            icon: const Icon(Icons.add_circle),
-                            label: const Text('Log Dose'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
+                        Builder(
+                          builder: (context) {
+                            final totalDosesInInterval = _getTotalDosesInLastInterval(currentMedication);
+                            final canLogDose = totalDosesInInterval < currentMedication.maxDosage;
+                            
+                            
+                            return SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: canLogDose ? () => _showLogDoseDialog(context, currentMedication) : null,
+                                icon: const Icon(Icons.add_circle),
+                                label: Text(canLogDose ? 'Log Dose' : 'Max Dosage Reached'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: canLogDose ? Colors.green : Colors.grey,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Builder(
+                          builder: (context) {
+                            final totalDosesInInterval = _getTotalDosesInLastInterval(currentMedication);
+                            final canLogDose = totalDosesInInterval < currentMedication.maxDosage;
+                            
+                            if (!canLogDose) {
+                              return Text(
+                                'Maximum dosage (${currentMedication.maxDosage} ${currentMedication.form}) reached for this time interval.',
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+                            }
+                            
+                            return Text(
+                              'Current total: ${totalDosesInInterval.toStringAsFixed(3)} ${currentMedication.form} / ${currentMedication.maxDosage} ${currentMedication.form}',
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 12,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-                ),
+                );
+                },
+              ),
               const SizedBox(height: 16),
 
               // Dose History
@@ -452,7 +533,7 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                     ),
                   );
                   Navigator.pop(context);
-                  _loadDoseLogs(); // Refresh the dose logs
+                  _refreshState(); // Refresh the dose logs and computed values
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Dose logged successfully')),
                   );
