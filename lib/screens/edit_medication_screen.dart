@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/medication_provider.dart';
 import '../models/medication.dart';
-import '../services/notification_service.dart';
+
 
 class EditMedicationScreen extends StatefulWidget {
   final Medication medication;
