@@ -13,12 +13,43 @@ class DoseLogScreen extends StatefulWidget {
 }
 
 class _DoseLogScreenState extends State<DoseLogScreen> {
+  Map<int, Medication> _medicationCache = {};
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MedicationProvider>().loadDoseLogs();
+      _loadData();
     });
+  }
+
+  Future<void> _loadData() async {
+    final provider = context.read<MedicationProvider>();
+    await provider.loadDoseLogs();
+    
+    // Pre-load medication data to avoid async lookups during scrolling
+    await _preloadMedications(provider);
+  }
+
+  Future<void> _preloadMedications(MedicationProvider provider) async {
+    final medicationIds = provider.doseLogs.map((log) => log.medicationId).toSet();
+    
+    for (final id in medicationIds) {
+      if (!_medicationCache.containsKey(id)) {
+        try {
+          final medication = await provider.getMedication(id);
+          if (medication != null) {
+            _medicationCache[id] = medication;
+          }
+        } catch (e) {
+          // Handle error silently, will show as unknown medication
+        }
+      }
+    }
+    
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -68,106 +99,94 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
             itemCount: provider.doseLogs.length,
             itemBuilder: (context, index) {
               final doseLog = provider.doseLogs[index];
-              return FutureBuilder<Medication?>(
-                future: _getMedicationForDoseLog(provider, doseLog),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Card(
-                      child: ListTile(
-                        leading: CircularProgressIndicator(),
-                        title: Text('Loading...'),
-                      ),
-                    );
-                  }
+              final medication = _medicationCache[doseLog.medicationId];
+              
+              if (medication == null) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: const Icon(Icons.error, color: Colors.red),
+                    title: const Text('Unknown Medication'),
+                    subtitle: Text('Dose logged on ${DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime)}'),
+                  ),
+                );
+              }
 
-                  final medication = snapshot.data;
-                  if (medication == null) {
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.error, color: Colors.red),
-                        title: const Text('Unknown Medication'),
-                        subtitle: Text('Dose logged on ${DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime)}'),
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: _getMedicationColor(medication),
+                    child: const Icon(Icons.medication, color: Colors.white),
+                  ),
+                  title: Text(
+                    medication.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${doseLog.doseGiven} ${medication.form}'),
+                      Text(
+                        'Given by: ${doseLog.givenBy}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
                       ),
-                    );
-                  }
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: _getMedicationColor(medication),
-                        child: const Icon(Icons.medication, color: Colors.white),
+                      Text(
+                        DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
                       ),
-                      title: Text(
-                        medication.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${doseLog.doseGiven} ${medication.form}'),
-                          Text(
-                            'Given by: ${doseLog.givenBy}',
+                      if (doseLog.note != null && doseLog.note!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Note: ${doseLog.note}',
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
-                          Text(
-                            DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime),
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                          if (doseLog.note != null && doseLog.note!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                'Note: ${doseLog.note}',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                        ],
+                        ),
+                    ],
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _showEditDoseDialog(context, doseLog, medication);
+                      } else if (value == 'delete') {
+                        _showDeleteConfirmation(context, doseLog);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, color: Colors.blue),
+                            SizedBox(width: 8),
+                            Text('Edit'),
+                          ],
+                        ),
                       ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            _showEditDoseDialog(context, doseLog, medication);
-                          } else if (value == 'delete') {
-                            _showDeleteConfirmation(context, doseLog);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit, color: Colors.blue),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Delete'),
-                              ],
-                            ),
-                          ),
-                        ],
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete'),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    ],
+                  ),
+                ),
               );
             },
           );
@@ -176,13 +195,6 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
     );
   }
 
-  Future<Medication?> _getMedicationForDoseLog(MedicationProvider provider, DoseLog doseLog) async {
-    try {
-      return await provider.getMedication(doseLog.medicationId);
-    } catch (e) {
-      return null;
-    }
-  }
 
   Color _getMedicationColor(Medication medication) {
     // Generate a consistent color based on medication name
@@ -214,13 +226,15 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               context.read<MedicationProvider>().deleteDoseLog(doseLog.id!);
               Navigator.pop(context);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Dose log deleted successfully')),
                 );
+                // Refresh the medication cache after deletion
+                await _preloadMedications(context.read<MedicationProvider>());
               }
             },
             style: ElevatedButton.styleFrom(
@@ -395,7 +409,7 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (selectedMedication == null) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -452,6 +466,8 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
                   }
                 }
 
+                // Refresh the medication cache after changes
+                await _preloadMedications(context.read<MedicationProvider>());
                 Navigator.pop(context);
               },
               child: Text(doseLog == null ? 'Add Dose' : 'Update Dose'),
