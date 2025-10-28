@@ -217,9 +217,11 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
             onPressed: () {
               context.read<MedicationProvider>().deleteDoseLog(doseLog.id!);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dose log deleted successfully')),
-              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Dose log deleted successfully')),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -395,24 +397,30 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
             ElevatedButton(
               onPressed: () {
                 if (selectedMedication == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a medication')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please select a medication')),
+                    );
+                  }
                   return;
                 }
 
                 final doseAmount = double.tryParse(doseController.text);
                 if (doseAmount == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a valid dose amount')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a valid dose amount')),
+                    );
+                  }
                   return;
                 }
 
                 if (givenByController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter who gave the dose')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter who gave the dose')),
+                    );
+                  }
                   return;
                 }
 
@@ -429,15 +437,19 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
                 if (doseLog == null) {
                   // Adding new dose
                   context.read<MedicationProvider>().logDose(newDoseLog);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Dose logged successfully')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dose logged successfully')),
+                    );
+                  }
                 } else {
                   // Editing existing dose
                   context.read<MedicationProvider>().updateDoseLog(newDoseLog);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Dose updated successfully')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dose updated successfully')),
+                    );
+                  }
                 }
 
                 Navigator.pop(context);

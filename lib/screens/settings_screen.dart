@@ -118,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 16),
                   ListTile(
                     leading: const Icon(Icons.delete_forever, color: Colors.red),
-                    title: const Text('Clear All Data'),
+                    title: const Text('Clear All Medication and Dose Data'),
                     subtitle: const Text('Remove all medications and dose logs'),
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: _showClearDataDialog,
@@ -259,9 +259,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Navigate back to home screen
       Navigator.pop(context);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All data cleared successfully')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All data cleared successfully')),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error clearing data: $e')),

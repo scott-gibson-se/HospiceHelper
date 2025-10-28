@@ -534,13 +534,17 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                   );
                   Navigator.pop(context);
                   _refreshState(); // Refresh the dose logs and computed values
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Dose logged successfully')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dose logged successfully')),
+                    );
+                  }
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter valid dose and who gave it')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter valid dose and who gave it')),
+                    );
+                  }
                 }
               },
               child: const Text('Log Dose'),

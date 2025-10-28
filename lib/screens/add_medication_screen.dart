@@ -268,10 +268,12 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       );
 
       context.read<MedicationProvider>().addMedication(medication).then((_) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Medication added successfully')),
-        );
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Medication added successfully')),
+          );
+        }
       }).catchError((error) {
         String errorMessage = error.toString();
         
@@ -279,9 +281,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         if (errorMessage.contains('Failed to set up notifications')) {
           _showNotificationErrorDialog(medication);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error adding medication: $error')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error adding medication: $error')),
+            );
+          }
         }
       });
     }
@@ -323,16 +327,20 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               );
               
               context.read<MedicationProvider>().addMedication(medicationWithoutNotifications).then((_) {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Close add medication screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Medication added without notifications')),
-                );
+                if (mounted) {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Close add medication screen
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Medication added without notifications')),
+                  );
+                }
               }).catchError((error) {
-                Navigator.pop(context); // Close dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error adding medication: $error')),
-                );
+                if (mounted) {
+                  Navigator.pop(context); // Close dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error adding medication: $error')),
+                  );
+                }
               });
             },
             child: const Text('Save Without Notifications'),

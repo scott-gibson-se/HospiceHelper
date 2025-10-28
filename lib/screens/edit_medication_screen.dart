@@ -300,10 +300,12 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       );
 
       context.read<MedicationProvider>().updateMedication(updatedMedication).then((_) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Medication updated successfully')),
-        );
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Medication updated successfully')),
+          );
+        }
       }).catchError((error) {
         String errorMessage = error.toString();
         
@@ -311,9 +313,11 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         if (errorMessage.contains('Failed to set up notifications')) {
           _showNotificationErrorDialog(updatedMedication);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error updating medication: $error')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error updating medication: $error')),
+            );
+          }
         }
       });
     }
@@ -354,16 +358,20 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
               );
               
               context.read<MedicationProvider>().updateMedication(medicationWithoutNotifications).then((_) {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Close edit medication screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Medication updated without notifications')),
-                );
+                if (mounted) {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Close edit medication screen
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Medication updated without notifications')),
+                  );
+                }
               }).catchError((error) {
-                Navigator.pop(context); // Close dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error updating medication: $error')),
-                );
+                if (mounted) {
+                  Navigator.pop(context); // Close dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error updating medication: $error')),
+                  );
+                }
               });
             },
             child: const Text('Save Without Notifications'),
@@ -389,17 +397,21 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           ElevatedButton(
             onPressed: () {
               context.read<MedicationProvider>().deleteMedication(widget.medication.id!).then((_) {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Close edit screen
-                Navigator.pop(context); // Go back to home screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Medication deleted successfully')),
-                );
+                if (mounted) {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Close edit screen
+                  Navigator.pop(context); // Go back to home screen
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Medication deleted successfully')),
+                  );
+                }
               }).catchError((error) {
-                Navigator.pop(context); // Close dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error deleting medication: $error')),
-                );
+                if (mounted) {
+                  Navigator.pop(context); // Close dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting medication: $error')),
+                  );
+                }
               });
             },
             style: ElevatedButton.styleFrom(
