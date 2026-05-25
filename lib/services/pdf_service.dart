@@ -9,6 +9,8 @@ class PdfService {
     List<Medication> medications,
     List<DoseLog> doseLogs, {
     String? patientName,
+    DateTime? reportStartDate,
+    DateTime? reportEndDate,
   }) async {
     final pdf = pw.Document();
 
@@ -18,7 +20,11 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
-          return _buildHeader(patientName);
+          return _buildHeader(
+            patientName,
+            reportStartDate: reportStartDate,
+            reportEndDate: reportEndDate,
+          );
         },
       ),
     );
@@ -44,7 +50,11 @@ class PdfService {
           return [
             _buildDoseHistoryHeader(),
             pw.SizedBox(height: 12),
-            _buildDoseHistoryTable(doseLogs, medications),
+            _buildDoseHistoryTable(
+              doseLogs,
+              medications,
+              hasDateRange: reportStartDate != null && reportEndDate != null,
+            ),
           ];
         },
       ),
@@ -53,7 +63,11 @@ class PdfService {
     return pdf;
   }
 
-  static pw.Widget _buildHeader(String? patientName) {
+  static pw.Widget _buildHeader(
+    String? patientName, {
+    DateTime? reportStartDate,
+    DateTime? reportEndDate,
+  }) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -72,6 +86,16 @@ class PdfService {
               fontSize: 16,
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.blue800,
+            ),
+          ),
+        ],
+        if (reportStartDate != null && reportEndDate != null) ...[
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Report period: ${DateFormat('MMM dd, yyyy').format(reportStartDate)} – ${DateFormat('MMM dd, yyyy').format(reportEndDate)}',
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
             ),
           ),
         ],
@@ -144,12 +168,18 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildDoseHistoryTable(List<DoseLog> doseLogs, List<Medication> medications) {
+  static pw.Widget _buildDoseHistoryTable(
+    List<DoseLog> doseLogs,
+    List<Medication> medications, {
+    bool hasDateRange = false,
+  }) {
     final medicationMap = {for (var med in medications) med.id: med};
 
     if (doseLogs.isEmpty) {
       return pw.Text(
-        'No doses logged yet',
+        hasDateRange
+            ? 'No doses logged in the selected date range'
+            : 'No doses logged yet',
         style: pw.TextStyle(
           fontSize: 12,
           color: PdfColors.grey600,

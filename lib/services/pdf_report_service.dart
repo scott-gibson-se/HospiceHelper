@@ -26,21 +26,37 @@ class PdfReportService {
     return downloadsPath;
   }
 
+  static String _formatDateForFileName(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
   /// Generates a PDF report and returns the file path for manual sharing
   static Future<String> generateMedicationReportFile(
     List<Medication> medications,
-    List<DoseLog> doseLogs,
-  ) async {
+    List<DoseLog> doseLogs, {
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+  }) async {
     try {
       // Get patient name from settings
       final patientName = await SettingsService.getPatientName();
       
       // Generate PDF report
-      final pdf = await PdfService.generateMedicationReport(medications, doseLogs, patientName: patientName);
+      final pdf = await PdfService.generateMedicationReport(
+        medications,
+        doseLogs,
+        patientName: patientName,
+        reportStartDate: reportStartDate,
+        reportEndDate: reportEndDate,
+      );
       
       // Save to accessible Downloads directory
       final downloadsPath = await _getAccessibleDownloadsPath();
-      final fileName = 'Hospice_Medication_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final fromDate = _formatDateForFileName(reportStartDate);
+      final toDate = _formatDateForFileName(reportEndDate);
+      final fileName = 'Hospice_Medication_Report_${fromDate}_to_$toDate.pdf';
       final file = File('$downloadsPath/$fileName');
       await file.writeAsBytes(await pdf.save());
 
