@@ -110,6 +110,7 @@ class _AddQuestionScreenState extends State<AddQuestionScreen> {
             children: [
               TextFormField(
                 controller: _titleController,
+                autofocus: true,
                 decoration: const InputDecoration(
                   labelText: 'Question Title',
                   border: OutlineInputBorder(),

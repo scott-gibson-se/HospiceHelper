@@ -17,6 +17,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   late TextEditingController _titleController;
   late TextEditingController _bodyController;
   bool _isEditing = false;
+  final _titleFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -29,7 +30,17 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
+  }
+
+  void _startEditing() {
+    setState(() {
+      _isEditing = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _titleFocusNode.requestFocus();
+    });
   }
 
   Future<void> _saveChanges() async {
@@ -145,12 +156,10 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
           if (!_isEditing)
             IconButton(
               onPressed: () {
-                setState(() {
-                  // sync controllers from latest provider value
-                  _titleController.text = current.title;
-                  _bodyController.text = current.body;
-                  _isEditing = true;
-                });
+                // sync controllers from latest provider value
+                _titleController.text = current.title;
+                _bodyController.text = current.body;
+                _startEditing();
               },
               icon: const Icon(Icons.edit),
             ),
@@ -207,6 +216,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
                     if (_isEditing)
                       TextField(
                         controller: _titleController,
+                        focusNode: _titleFocusNode,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: 'Enter note title',

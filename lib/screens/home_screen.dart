@@ -5,17 +5,18 @@ import '../providers/medication_provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/note_provider.dart';
 import '../models/medication.dart';
-import '../models/dose_log.dart';
 import '../models/question.dart';
 import '../models/note.dart';
 import 'add_medication_screen.dart';
 import 'medication_detail_screen.dart';
 import 'dose_log_screen.dart';
+import 'log_dose_screen.dart';
 import 'settings_screen.dart';
 import 'add_question_screen.dart';
 import 'question_detail_screen.dart';
 import 'add_note_screen.dart';
 import 'note_detail_screen.dart';
+import 'tab_reports_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -135,52 +136,99 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           _buildNotesTab(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          if (_tabController.index == 0) {
-            // Medications tab - add medication
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AddMedicationScreen(),
-              ),
-            );
-            // Refresh medications when returning
-            if (mounted) {
-              context.read<MedicationProvider>().loadMedications();
-            }
-          } else if (_tabController.index == 1) {
-            // Questions tab - add question
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AddQuestionScreen(),
-              ),
-            );
-            // Refresh questions when returning
-            if (mounted) {
-              context.read<QuestionProvider>().loadQuestions();
-            }
-          } else {
-            // Notes tab - add note
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AddNoteScreen(),
-              ),
-            );
-            // Refresh notes when returning
-            if (mounted) {
-              context.read<NoteProvider>().loadNotes();
-            }
-          }
-        },
-        tooltip: _tabController.index == 0 
-            ? 'Add Medication' 
-            : _tabController.index == 1 
-                ? 'Add Question' 
-                : 'Add Note',
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'add_fab',
+            tooltip: _addFabTooltip,
+            onPressed: _onAddPressed,
+            child: const Icon(Icons.add),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'reports_fab',
+            tooltip: _reportsFabTooltip,
+            onPressed: _openReportsScreen,
+            child: const Icon(Icons.assessment),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _addFabTooltip {
+    switch (_tabController.index) {
+      case 0:
+        return 'Add Medication';
+      case 1:
+        return 'Add Question';
+      default:
+        return 'Add Note';
+    }
+  }
+
+  String get _reportsFabTooltip {
+    switch (_tabController.index) {
+      case 0:
+        return 'Medication Reports';
+      case 1:
+        return 'Question Reports';
+      default:
+        return 'Note Reports';
+    }
+  }
+
+  ReportTab get _currentReportTab {
+    switch (_tabController.index) {
+      case 0:
+        return ReportTab.medications;
+      case 1:
+        return ReportTab.questions;
+      default:
+        return ReportTab.notes;
+    }
+  }
+
+  Future<void> _onAddPressed() async {
+    if (_tabController.index == 0) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AddMedicationScreen(),
+        ),
+      );
+      if (mounted) {
+        context.read<MedicationProvider>().loadMedications();
+      }
+    } else if (_tabController.index == 1) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AddQuestionScreen(),
+        ),
+      );
+      if (mounted) {
+        context.read<QuestionProvider>().loadQuestions();
+      }
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AddNoteScreen(),
+        ),
+      );
+      if (mounted) {
+        context.read<NoteProvider>().loadNotes();
+      }
+    }
+  }
+
+  void _openReportsScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TabReportsScreen(reportTab: _currentReportTab),
       ),
     );
   }
@@ -196,149 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   }
 
   void _showLogDoseDialog(BuildContext context, Medication medication) {
-    final doseController = TextEditingController();
-    final givenByController = TextEditingController();
-    final noteController = TextEditingController();
-    DateTime selectedDateTime = DateTime.now();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text('Log Dose - ${medication.name}'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: doseController,
-                  decoration: InputDecoration(
-                    labelText: 'Dose Given',
-                    hintText: 'Enter amount',
-                    suffixText: medication.form,
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: givenByController,
-                  decoration: const InputDecoration(
-                    labelText: 'Given By',
-                    hintText: 'Who administered the dose?',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Date and Time Selection
-                Row(
-                  children: [
-                    Expanded(
-                      child: ListTile(
-                        title: const Text('Date'),
-                        subtitle: Text(
-                          '${selectedDateTime.day}/${selectedDateTime.month}/${selectedDateTime.year}',
-                        ),
-                        trailing: const Icon(Icons.calendar_today),
-                        onTap: () async {
-                          final date = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDateTime,
-                            firstDate: DateTime.now().subtract(const Duration(days: 30)),
-                            lastDate: DateTime.now().add(const Duration(days: 1)),
-                          );
-                          if (date != null) {
-                            setState(() {
-                              selectedDateTime = DateTime(
-                                date.year,
-                                date.month,
-                                date.day,
-                                selectedDateTime.hour,
-                                selectedDateTime.minute,
-                              );
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ListTile(
-                        title: const Text('Time'),
-                        subtitle: Text(
-                          '${selectedDateTime.hour.toString().padLeft(2, '0')}:${selectedDateTime.minute.toString().padLeft(2, '0')}',
-                        ),
-                        trailing: const Icon(Icons.access_time),
-                        onTap: () async {
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(selectedDateTime),
-                          );
-                          if (time != null) {
-                            setState(() {
-                              selectedDateTime = DateTime(
-                                selectedDateTime.year,
-                                selectedDateTime.month,
-                                selectedDateTime.day,
-                                time.hour,
-                                time.minute,
-                              );
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: noteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (Optional)',
-                    hintText: 'Any additional notes...',
-                  ),
-                  maxLines: 2,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final dose = double.tryParse(doseController.text);
-                if (dose != null && dose > 0 && givenByController.text.isNotEmpty) {
-                  context.read<MedicationProvider>().logDose(
-                    DoseLog(
-                      medicationId: medication.id!,
-                      dateTime: selectedDateTime,
-                      doseGiven: dose,
-                      givenBy: givenByController.text,
-                      note: noteController.text.isNotEmpty ? noteController.text : null,
-                      createdAt: DateTime.now(),
-                    ),
-                  );
-                  Navigator.pop(context);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Dose logged successfully')),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter valid dose and who gave it')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Log Dose'),
-            ),
-          ],
-        ),
-      ),
-    );
+    LogDoseScreen.showForMedication(context, medication: medication);
   }
 
   Widget _buildMedicationsTab() {

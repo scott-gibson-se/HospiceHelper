@@ -3,6 +3,8 @@ import 'dart:io';
 import 'pdf_service.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
+import '../models/question.dart';
+import '../models/note.dart';
 import 'settings_service.dart';
 
 class PdfReportService {
@@ -32,6 +34,21 @@ class PdfReportService {
     return '${date.year}-$month-$day';
   }
 
+  static Future<String> _saveReportFile(
+    dynamic pdf,
+    String reportPrefix,
+    DateTime reportStartDate,
+    DateTime reportEndDate,
+  ) async {
+    final downloadsPath = await _getAccessibleDownloadsPath();
+    final fromDate = _formatDateForFileName(reportStartDate);
+    final toDate = _formatDateForFileName(reportEndDate);
+    final fileName = '${reportPrefix}_${fromDate}_to_$toDate.pdf';
+    final file = File('$downloadsPath/$fileName');
+    await file.writeAsBytes(await pdf.save());
+    return file.path;
+  }
+
   /// Generates a PDF report and returns the file path for manual sharing
   static Future<String> generateMedicationReportFile(
     List<Medication> medications,
@@ -51,16 +68,90 @@ class PdfReportService {
         reportStartDate: reportStartDate,
         reportEndDate: reportEndDate,
       );
-      
-      // Save to accessible Downloads directory
-      final downloadsPath = await _getAccessibleDownloadsPath();
-      final fromDate = _formatDateForFileName(reportStartDate);
-      final toDate = _formatDateForFileName(reportEndDate);
-      final fileName = 'Hospice_Medication_Report_${fromDate}_to_$toDate.pdf';
-      final file = File('$downloadsPath/$fileName');
-      await file.writeAsBytes(await pdf.save());
 
-      return file.path;
+      return await _saveReportFile(
+        pdf,
+        'Hospice_Medication_Report',
+        reportStartDate,
+        reportEndDate,
+      );
+    } catch (e) {
+      throw Exception('Failed to generate PDF report: $e');
+    }
+  }
+
+  static Future<String> generateMedicationDoseGridReportFile(
+    List<Medication> medications,
+    List<DoseLog> doseLogs, {
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+  }) async {
+    try {
+      final patientName = await SettingsService.getPatientName();
+      final pdf = await PdfService.generateMedicationDoseGridReport(
+        medications,
+        doseLogs,
+        patientName: patientName,
+        reportStartDate: reportStartDate,
+        reportEndDate: reportEndDate,
+      );
+
+      return await _saveReportFile(
+        pdf,
+        'Hospice_Medication_Dose_Grid_Report',
+        reportStartDate,
+        reportEndDate,
+      );
+    } catch (e) {
+      throw Exception('Failed to generate medication dose grid PDF report: $e');
+    }
+  }
+
+  static Future<String> generateQuestionsReportFile(
+    List<Question> questions, {
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+  }) async {
+    try {
+      final patientName = await SettingsService.getPatientName();
+      final pdf = await PdfService.generateQuestionsReport(
+        questions,
+        patientName: patientName,
+        reportStartDate: reportStartDate,
+        reportEndDate: reportEndDate,
+      );
+
+      return await _saveReportFile(
+        pdf,
+        'Hospice_Questions_Report',
+        reportStartDate,
+        reportEndDate,
+      );
+    } catch (e) {
+      throw Exception('Failed to generate questions PDF report: $e');
+    }
+  }
+
+  static Future<String> generateNotesReportFile(
+    List<Note> notes, {
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+  }) async {
+    try {
+      final patientName = await SettingsService.getPatientName();
+      final pdf = await PdfService.generateNotesReport(
+        notes,
+        patientName: patientName,
+        reportStartDate: reportStartDate,
+        reportEndDate: reportEndDate,
+      );
+
+      return await _saveReportFile(
+        pdf,
+        'Hospice_Notes_Report',
+        reportStartDate,
+        reportEndDate,
+      );
     } catch (e) {
       throw Exception('Failed to generate PDF report: $e');
     }

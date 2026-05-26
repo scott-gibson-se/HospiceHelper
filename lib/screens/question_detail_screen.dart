@@ -19,6 +19,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   late TextEditingController _answerController;
   late DateTime _dateEntered;
   bool _isEditing = false;
+  final _titleFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -34,7 +35,17 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     _titleController.dispose();
     _questionTextController.dispose();
     _answerController.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
+  }
+
+  void _startEditing() {
+    setState(() {
+      _isEditing = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _titleFocusNode.requestFocus();
+    });
   }
 
   Future<void> _pickDateTime() async {
@@ -167,16 +178,19 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              setState(() {
-                if (!_isEditing) {
-                  // sync controllers from latest provider value
-                  _titleController.text = current.title;
-                  _questionTextController.text = current.questionText;
-                  _answerController.text = current.answer ?? '';
-                  _dateEntered = current.dateEntered;
-                }
-                _isEditing = !_isEditing;
-              });
+              if (_isEditing) {
+                setState(() {
+                  _isEditing = false;
+                });
+                return;
+              }
+
+              // sync controllers from latest provider value
+              _titleController.text = current.title;
+              _questionTextController.text = current.questionText;
+              _answerController.text = current.answer ?? '';
+              _dateEntered = current.dateEntered;
+              _startEditing();
             },
             icon: Icon(_isEditing ? Icons.close : Icons.edit),
             tooltip: _isEditing ? 'Cancel' : 'Edit',
@@ -240,6 +254,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                     if (_isEditing)
                       TextField(
                         controller: _titleController,
+                        focusNode: _titleFocusNode,
                         decoration: const InputDecoration(
                           hintText: 'Enter question title',
                           border: OutlineInputBorder(),
@@ -447,11 +462,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  _isEditing = true;
-                                });
-                              },
+                              onPressed: _startEditing,
                               icon: const Icon(Icons.edit),
                               label: const Text('Add Answer'),
                             ),

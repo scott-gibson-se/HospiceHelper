@@ -74,6 +74,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
             children: [
               TextFormField(
                 controller: _titleController,
+                autofocus: true,
                 decoration: const InputDecoration(
                   labelText: 'Note Title',
                   border: OutlineInputBorder(),

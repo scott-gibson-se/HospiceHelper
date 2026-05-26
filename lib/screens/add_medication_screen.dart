@@ -71,6 +71,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nameController,
+                      autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Medication Name *',
                         hintText: 'e.g., Pain Relief',

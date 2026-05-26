@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/medication_provider.dart';
 import '../models/dose_log.dart';
 import '../models/medication.dart';
+import 'log_dose_screen.dart';
 
 class DoseLogScreen extends StatefulWidget {
   const DoseLogScreen({super.key});
@@ -277,204 +278,20 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
     );
   }
 
-  void _showDoseDialog({
+  Future<void> _showDoseDialog({
     required BuildContext context,
     required String title,
     required DoseLog? doseLog,
     required List<Medication> medications,
-  }) {
-    final doseController = TextEditingController(text: doseLog?.doseGiven.toString() ?? '');
-    final givenByController = TextEditingController(text: doseLog?.givenBy ?? '');
-    final noteController = TextEditingController(text: doseLog?.note ?? '');
-    DateTime selectedDateTime = doseLog?.dateTime ?? DateTime.now();
-    Medication? selectedMedication = doseLog != null 
-        ? medications.firstWhere((m) => m.id == doseLog.medicationId)
-        : medications.first;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Medication selection
-                DropdownButtonFormField<Medication>(
-                  value: selectedMedication,
-                  decoration: const InputDecoration(
-                    labelText: 'Medication',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: medications.map((medication) {
-                    return DropdownMenuItem(
-                      value: medication,
-                      child: Text(medication.name),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedMedication = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                
-                // Date and time selection
-                ListTile(
-                  title: const Text('Date & Time'),
-                  subtitle: Text(DateFormat('MMM dd, yyyy - hh:mm a').format(selectedDateTime)),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDateTime,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 1)),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay.fromDateTime(selectedDateTime),
-                      );
-                      if (time != null) {
-                        setState(() {
-                          selectedDateTime = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                
-                // Dose amount
-                TextFormField(
-                  controller: doseController,
-                  decoration: InputDecoration(
-                    labelText: 'Dose Amount',
-                    suffixText: selectedMedication?.form ?? '',
-                    border: const OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a dose amount';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Please enter a valid number';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                
-                // Given by
-                TextFormField(
-                  controller: givenByController,
-                  decoration: const InputDecoration(
-                    labelText: 'Given By',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter who gave the dose';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                
-                // Note
-                TextFormField(
-                  controller: noteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (Optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (selectedMedication == null) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please select a medication')),
-                    );
-                  }
-                  return;
-                }
-
-                final doseAmount = double.tryParse(doseController.text);
-                if (doseAmount == null) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid dose amount')),
-                    );
-                  }
-                  return;
-                }
-
-                if (givenByController.text.isEmpty) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter who gave the dose')),
-                    );
-                  }
-                  return;
-                }
-
-                final newDoseLog = DoseLog(
-                  id: doseLog?.id,
-                  medicationId: selectedMedication!.id!,
-                  dateTime: selectedDateTime,
-                  doseGiven: doseAmount,
-                  givenBy: givenByController.text,
-                  note: noteController.text.isEmpty ? null : noteController.text,
-                  createdAt: doseLog?.createdAt ?? DateTime.now(),
-                );
-
-                if (doseLog == null) {
-                  // Adding new dose
-                  context.read<MedicationProvider>().logDose(newDoseLog);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Dose logged successfully')),
-                    );
-                  }
-                } else {
-                  // Editing existing dose
-                  context.read<MedicationProvider>().updateDoseLog(newDoseLog);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Dose updated successfully')),
-                    );
-                  }
-                }
-
-                // Refresh the medication cache after changes
-                await _preloadMedications(context.read<MedicationProvider>());
-                Navigator.pop(context);
-              },
-              child: Text(doseLog == null ? 'Add Dose' : 'Update Dose'),
-            ),
-          ],
-        ),
-      ),
+  }) async {
+    final saved = await LogDoseScreen.showForDoseEntry(
+      context,
+      title: title,
+      medications: medications,
+      doseLog: doseLog,
     );
+    if (saved == true && mounted) {
+      await _preloadMedications(context.read<MedicationProvider>());
+    }
   }
 }
