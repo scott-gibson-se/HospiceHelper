@@ -22,12 +22,13 @@ class MedicationDetailScreen extends StatefulWidget {
 
 class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
   List<DoseLog> _doseLogs = [];
+  bool _doseHistoryLoaded = false;
+  bool _doseHistoryLoading = false;
   Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadDoseLogs();
     _startRefreshTimer();
   }
 
@@ -49,18 +50,27 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
   }
 
   Future<void> _loadDoseLogs() async {
+    setState(() {
+      _doseHistoryLoading = true;
+    });
+
     final provider = context.read<MedicationProvider>();
     final logs = await provider.getDoseLogsForMedication(widget.medication.id!);
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _doseLogs = logs;
+      _doseHistoryLoaded = true;
+      _doseHistoryLoading = false;
     });
   }
 
   Future<void> _refreshState() async {
-    // Reload dose logs to get the latest data
-    await _loadDoseLogs();
-    // Force a rebuild to update computed values
-    if (mounted) {
+    if (_doseHistoryLoaded) {
+      await _loadDoseLogs();
+    } else if (mounted) {
       setState(() {});
     }
   }
@@ -76,13 +86,14 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
   }
 
 
-  double _getTotalDosesInLastInterval(Medication medication) {
-    if (_doseLogs.isEmpty) return 0.0;
-    
+  double _getTotalDosesInLastInterval(Medication medication, List<DoseLog> doseLogs) {
+    final medicationLogs = doseLogs.where((log) => log.medicationId == medication.id);
+    if (medicationLogs.isEmpty) return 0.0;
+
     final now = DateTime.now();
     final intervalStart = now.subtract(Duration(minutes: medication.minTimeBetweenDoses));
-    
-    return _doseLogs
+
+    return medicationLogs
         .where((log) => log.dateTime.isAfter(intervalStart))
         .fold(0.0, (sum, log) => sum + log.doseGiven);
   }
@@ -214,7 +225,7 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                       ],
                       const SizedBox(height: 8),
                       Text(
-                        'Total doses in last ${currentMedication.formattedTimeInterval}: ${_getTotalDosesInLastInterval(currentMedication).toStringAsFixed(3)} ${currentMedication.form}',
+                        'Total doses in last ${currentMedication.formattedTimeInterval}: ${_getTotalDosesInLastInterval(currentMedication, provider.doseLogs).toStringAsFixed(3)} ${currentMedication.form}',
                         style: TextStyle(
                           color: Colors.grey[700],
                           fontWeight: FontWeight.w500,
@@ -229,7 +240,10 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
               // Quick Actions
               Builder(
                 builder: (context) {
-                  final totalDosesInInterval = _getTotalDosesInLastInterval(currentMedication);
+                  final totalDosesInInterval = _getTotalDosesInLastInterval(
+                    currentMedication,
+                    provider.doseLogs,
+                  );
                   final canLogDose = totalDosesInInterval < currentMedication.maxDosage;
                   final shouldShowQuickActions = isDue || canLogDose;
                   
@@ -248,7 +262,10 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                         const SizedBox(height: 12),
                         Builder(
                           builder: (context) {
-                            final totalDosesInInterval = _getTotalDosesInLastInterval(currentMedication);
+                            final totalDosesInInterval = _getTotalDosesInLastInterval(
+                    currentMedication,
+                    provider.doseLogs,
+                  );
                             final canLogDose = totalDosesInInterval < currentMedication.maxDosage;
                             
                             
@@ -269,7 +286,10 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                         const SizedBox(height: 8),
                         Builder(
                           builder: (context) {
-                            final totalDosesInInterval = _getTotalDosesInLastInterval(currentMedication);
+                            final totalDosesInInterval = _getTotalDosesInLastInterval(
+                    currentMedication,
+                    provider.doseLogs,
+                  );
                             final canLogDose = totalDosesInInterval < currentMedication.maxDosage;
                             
                             if (!canLogDose) {
@@ -314,14 +334,32 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
                             'Dose History',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
-                          TextButton(
-                            onPressed: _loadDoseLogs,
-                            child: const Text('Refresh'),
-                          ),
+                          if (_doseHistoryLoaded)
+                            TextButton(
+                              onPressed: _doseHistoryLoading ? null : _loadDoseLogs,
+                              child: const Text('Refresh'),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      if (_doseLogs.isEmpty)
+                      if (!_doseHistoryLoaded)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _doseHistoryLoading ? null : _loadDoseLogs,
+                            icon: _doseHistoryLoading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.history),
+                            label: Text(
+                              _doseHistoryLoading ? 'Loading...' : 'Load Dose History',
+                            ),
+                          ),
+                        )
+                      else if (_doseLogs.isEmpty)
                         const Padding(
                           padding: EdgeInsets.all(16),
                           child: Text(
@@ -412,7 +450,11 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
   Future<void> _showLogDoseDialog(BuildContext context, Medication medication) async {
     final saved = await LogDoseScreen.showForMedication(context, medication: medication);
     if (saved == true && mounted) {
-      _refreshState();
+      if (_doseHistoryLoaded) {
+        await _loadDoseLogs();
+      } else {
+        setState(() {});
+      }
     }
   }
 }
