@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/medication.dart';
@@ -6,6 +8,7 @@ import '../models/question.dart';
 import '../models/note.dart';
 
 class DatabaseHelper {
+  static const String databaseName = 'hospice_meds.db';
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
 
@@ -20,7 +23,7 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'hospice_meds.db');
+    String path = join(await getDatabasesPath(), databaseName);
     return await openDatabase(
       path,
       version: 4,
@@ -385,5 +388,64 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  Future<String> getDatabaseFilePath() async {
+    return join(await getDatabasesPath(), databaseName);
+  }
+
+  Future<void> closeDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
+
+  Future<void> exportDatabaseTo(String destinationPath) async {
+    final sourcePath = await getDatabaseFilePath();
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      throw Exception('Database file not found');
+    }
+
+    await closeDatabase();
+    try {
+      await sourceFile.copy(destinationPath);
+    } finally {
+      await database;
+    }
+  }
+
+  Future<void> importDatabaseFrom(String sourcePath) async {
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      throw Exception('Selected database file not found');
+    }
+
+    if (!await isValidSqliteDatabase(sourcePath)) {
+      throw Exception('Selected file is not a valid SQLite database');
+    }
+
+    final destinationPath = await getDatabaseFilePath();
+    await closeDatabase();
+    try {
+      await sourceFile.copy(destinationPath);
+    } finally {
+      await database;
+    }
+  }
+
+  static Future<bool> isValidSqliteDatabase(String path) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      return false;
+    }
+
+    final bytes = await file.readAsBytes();
+    if (bytes.length < 16) {
+      return false;
+    }
+
+    return String.fromCharCodes(bytes.sublist(0, 15)) == 'SQLite format 3';
   }
 }
