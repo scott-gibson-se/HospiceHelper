@@ -19,19 +19,35 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   late TextEditingController _answerController;
   late DateTime _dateEntered;
   bool _isEditing = false;
+  bool _isSaving = false;
   final _titleFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.question.title);
-    _questionTextController = TextEditingController(text: widget.question.questionText);
-    _answerController = TextEditingController(text: widget.question.answer ?? '');
+    _questionTextController =
+        TextEditingController(text: widget.question.questionText);
+    _answerController =
+        TextEditingController(text: widget.question.answer ?? '');
     _dateEntered = widget.question.dateEntered;
+
+    _titleController.addListener(_onControllerChanged);
+    _questionTextController.addListener(_onControllerChanged);
+    _answerController.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    if (_isEditing) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    _titleController.removeListener(_onControllerChanged);
+    _questionTextController.removeListener(_onControllerChanged);
+    _answerController.removeListener(_onControllerChanged);
     _titleController.dispose();
     _questionTextController.dispose();
     _answerController.dispose();
@@ -73,7 +89,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   }
 
   Future<void> _saveAllChanges(Question current) async {
-    if (_titleController.text.trim().isEmpty || _questionTextController.text.trim().isEmpty) {
+    if (_titleController.text.trim().isEmpty ||
+        _questionTextController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fill in title and question text'),
@@ -90,7 +107,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         questionText: _questionTextController.text.trim(),
         dateEntered: _dateEntered,
         answer: answerText.isEmpty ? null : answerText,
-        answeredAt: answerText.isEmpty ? null : (current.answeredAt ?? DateTime.now()),
+        answeredAt:
+            answerText.isEmpty ? null : (current.answeredAt ?? DateTime.now()),
         updatedAt: DateTime.now(),
       );
       await context.read<QuestionProvider>().updateQuestion(updated);
@@ -119,12 +137,56 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
   }
 
+  Future<bool> _showDiscardDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Discard changes?'),
+            content: const Text(
+                'You have unsaved changes. Are you sure you want to discard them?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  bool _hasUnsavedChanges(Question current) {
+    if (!_isEditing) return false;
+
+    final bool titleChanged = _titleController.text.trim() != current.title;
+    final bool questionChanged =
+        _questionTextController.text.trim() != current.questionText;
+    final String currentAnswer = current.answer ?? '';
+    final bool answerChanged = _answerController.text.trim() != currentAnswer;
+
+    final bool dateChanged = _dateEntered.year != current.dateEntered.year ||
+        _dateEntered.month != current.dateEntered.month ||
+        _dateEntered.day != current.dateEntered.day ||
+        _dateEntered.hour != current.dateEntered.hour ||
+        _dateEntered.minute != current.dateEntered.minute;
+
+    return titleChanged || questionChanged || answerChanged || dateChanged;
+  }
+
   Future<void> _deleteQuestion() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Question'),
-        content: const Text('Are you sure you want to delete this question? This action cannot be undone.'),
+        content: const Text(
+            'Are you sure you want to delete this question? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -141,7 +203,12 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
     if (confirmed == true) {
       try {
-        await context.read<QuestionProvider>().deleteQuestion(widget.question.id!);
+        setState(() {
+          _isSaving = true;
+        });
+        await context
+            .read<QuestionProvider>()
+            .deleteQuestion(widget.question.id!);
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -153,6 +220,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         }
       } catch (e) {
         if (mounted) {
+          setState(() {
+            _isSaving = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error deleting question: $e'),
@@ -171,309 +241,327 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       (q) => q.id == widget.question.id,
       orElse: () => widget.question,
     );
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Question Details'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            onPressed: () {
-              if (_isEditing) {
-                setState(() {
-                  _isEditing = false;
-                });
-                return;
-              }
 
-              // sync controllers from latest provider value
-              _titleController.text = current.title;
-              _questionTextController.text = current.questionText;
-              _answerController.text = current.answer ?? '';
-              _dateEntered = current.dateEntered;
-              _startEditing();
-            },
-            icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            tooltip: _isEditing ? 'Cancel' : 'Edit',
-          ),
-          if (_isEditing)
+    return PopScope(
+      canPop: !_hasUnsavedChanges(current) || _isSaving,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        final bool shouldPop = await _showDiscardDialog();
+        if (shouldPop && context.mounted) {
+          setState(() {
+            _isSaving = true;
+          });
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Question Details'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          actions: [
             IconButton(
-              onPressed: () => _saveAllChanges(current),
-              icon: const Icon(Icons.save),
-              tooltip: 'Save',
+              onPressed: () {
+                if (_isEditing) {
+                  setState(() {
+                    _isEditing = false;
+                  });
+                  return;
+                }
+
+                // sync controllers from latest provider value
+                _titleController.text = current.title;
+                _questionTextController.text = current.questionText;
+                _answerController.text = current.answer ?? '';
+                _dateEntered = current.dateEntered;
+                _startEditing();
+              },
+              icon: Icon(_isEditing ? Icons.close : Icons.edit),
+              tooltip: _isEditing ? 'Cancel' : 'Edit',
             ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'delete') {
-                _deleteQuestion();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Delete Question'),
-                  ],
+            if (_isEditing)
+              IconButton(
+                onPressed: () => _saveAllChanges(current),
+                icon: const Icon(Icons.save),
+                tooltip: 'Save',
+              ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _deleteQuestion();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete Question'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Question Title
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.help_outline,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Question Title',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isEditing)
+                        TextField(
+                          controller: _titleController,
+                          focusNode: _titleFocusNode,
+                          decoration: const InputDecoration(
+                            hintText: 'Enter question title',
+                            border: OutlineInputBorder(),
+                          ),
+                        )
+                      else
+                        Text(
+                          current.title,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Question Text
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.question_answer,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Question',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isEditing)
+                        TextField(
+                          controller: _questionTextController,
+                          maxLines: null,
+                          decoration: const InputDecoration(
+                            hintText: 'Enter the question text',
+                            border: OutlineInputBorder(),
+                          ),
+                        )
+                      else
+                        Text(
+                          current.questionText,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Date and Time
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Date & Time Entered',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isEditing)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                DateFormat('EEEE, MMMM dd, yyyy - HH:mm')
+                                    .format(_dateEntered),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: _pickDateTime,
+                              icon: const Icon(Icons.edit_calendar),
+                              label: const Text('Change'),
+                            )
+                          ],
+                        )
+                      else
+                        Text(
+                          DateFormat('EEEE, MMMM dd, yyyy - HH:mm')
+                              .format(current.dateEntered),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Answer Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.question_answer,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Answer',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: current.isAnswered
+                                  ? Colors.green.shade100
+                                  : Colors.orange.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              current.status,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: current.isAnswered
+                                    ? Colors.green.shade700
+                                    : Colors.orange.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isEditing)
+                        Column(
+                          children: [
+                            TextField(
+                              controller: _answerController,
+                              decoration: const InputDecoration(
+                                hintText: 'Enter your answer here...',
+                                border: OutlineInputBorder(),
+                              ),
+                              maxLines: 5,
+                            ),
+                            const SizedBox(height: 16),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: ElevatedButton.icon(
+                                onPressed: () => _saveAllChanges(current),
+                                icon: const Icon(Icons.save),
+                                label: const Text('Save Changes'),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (current.isAnswered) ...[
+                              Text(
+                                current.answer!,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Answered on: ${DateFormat('MMM dd, yyyy - HH:mm').format(current.answeredAt!)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ] else ...[
+                              Text(
+                                'No answer provided yet.',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _startEditing,
+                                icon: const Icon(Icons.edit),
+                                label: const Text('Add Answer'),
+                              ),
+                            ],
+                          ],
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Question Title
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.help_outline,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Question Title',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isEditing)
-                      TextField(
-                        controller: _titleController,
-                        focusNode: _titleFocusNode,
-                        decoration: const InputDecoration(
-                          hintText: 'Enter question title',
-                          border: OutlineInputBorder(),
-                        ),
-                      )
-                    else
-                      Text(
-                        current.title,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Question Text
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.question_answer,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Question',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isEditing)
-                      TextField(
-                        controller: _questionTextController,
-                        maxLines: null,
-                        decoration: const InputDecoration(
-                          hintText: 'Enter the question text',
-                          border: OutlineInputBorder(),
-                        ),
-                      )
-                    else
-                      Text(
-                        current.questionText,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Date and Time
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Date & Time Entered',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isEditing)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(_dateEntered),
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            onPressed: _pickDateTime,
-                            icon: const Icon(Icons.edit_calendar),
-                            label: const Text('Change'),
-                          )
-                        ],
-                      )
-                    else
-                      Text(
-                        DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.dateEntered),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Answer Section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.question_answer,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Answer',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: current.isAnswered 
-                                ? Colors.green.shade100 
-                                : Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            current.status,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: current.isAnswered 
-                                  ? Colors.green.shade700 
-                                  : Colors.orange.shade700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isEditing)
-                      Column(
-                        children: [
-                          TextField(
-                            controller: _answerController,
-                            decoration: const InputDecoration(
-                              hintText: 'Enter your answer here...',
-                              border: OutlineInputBorder(),
-                            ),
-                            maxLines: 5,
-                          ),
-                          const SizedBox(height: 16),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _saveAllChanges(current),
-                              icon: const Icon(Icons.save),
-                              label: const Text('Save Changes'),
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (current.isAnswered) ...[
-                            Text(
-                              current.answer!,
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Answered on: ${DateFormat('MMM dd, yyyy - HH:mm').format(current.answeredAt!)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ] else ...[
-                            Text(
-                              'No answer provided yet.',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey.shade600,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: _startEditing,
-                              icon: const Icon(Icons.edit),
-                              label: const Text('Add Answer'),
-                            ),
-                          ],
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

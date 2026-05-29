@@ -17,6 +17,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   late TextEditingController _titleController;
   late TextEditingController _bodyController;
   bool _isEditing = false;
+  bool _isSaving = false;
   final _titleFocusNode = FocusNode();
 
   @override
@@ -24,10 +25,21 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
     super.initState();
     _titleController = TextEditingController(text: widget.note.title);
     _bodyController = TextEditingController(text: widget.note.body);
+
+    _titleController.addListener(_onControllerChanged);
+    _bodyController.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    if (_isEditing) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    _titleController.removeListener(_onControllerChanged);
+    _bodyController.removeListener(_onControllerChanged);
     _titleController.dispose();
     _bodyController.dispose();
     _titleFocusNode.dispose();
@@ -44,7 +56,8 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   }
 
   Future<void> _saveChanges() async {
-    if (_titleController.text.trim().isEmpty || _bodyController.text.trim().isEmpty) {
+    if (_titleController.text.trim().isEmpty ||
+        _bodyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fill in all fields'),
@@ -67,13 +80,13 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
         body: _bodyController.text.trim(),
         updatedAt: DateTime.now(),
       );
-      
+
       await context.read<NoteProvider>().updateNote(updatedNote);
-      
+
       setState(() {
         _isEditing = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -94,12 +107,47 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
     }
   }
 
+  Future<bool> _showDiscardDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Discard changes?'),
+            content: const Text(
+              'You have unsaved changes. Are you sure you want to discard them?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  bool _hasUnsavedChanges(Note current) {
+    if (!_isEditing) return false;
+
+    return _titleController.text.trim() != current.title ||
+        _bodyController.text.trim() != current.body;
+  }
+
   Future<void> _deleteNote() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Note'),
-        content: const Text('Are you sure you want to delete this note? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this note? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -116,6 +164,9 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
 
     if (confirmed == true) {
       try {
+        setState(() {
+          _isSaving = true;
+        });
         await context.read<NoteProvider>().deleteNote(widget.note.id!);
         if (mounted) {
           Navigator.of(context).pop();
@@ -128,6 +179,9 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
         }
       } catch (e) {
         if (mounted) {
+          setState(() {
+            _isSaving = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error deleting note: $e'),
@@ -148,198 +202,212 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
       orElse: () => widget.note,
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Note Details'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          if (!_isEditing)
-            IconButton(
-              onPressed: () {
-                // sync controllers from latest provider value
-                _titleController.text = current.title;
-                _bodyController.text = current.body;
-                _startEditing();
+    return PopScope(
+      canPop: !_hasUnsavedChanges(current) || _isSaving,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        final bool shouldPop = await _showDiscardDialog();
+        if (shouldPop && context.mounted) {
+          setState(() {
+            _isSaving = true;
+          });
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Note Details'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          actions: [
+            if (!_isEditing)
+              IconButton(
+                onPressed: () {
+                  // sync controllers from latest provider value
+                  _titleController.text = current.title;
+                  _bodyController.text = current.body;
+                  _startEditing();
+                },
+                icon: const Icon(Icons.edit),
+              ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _deleteNote();
+                }
               },
-              icon: const Icon(Icons.edit),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete Note'),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'delete') {
-                _deleteNote();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Delete Note'),
-                  ],
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Note Title
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.title,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Title',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isEditing)
+                        TextField(
+                          controller: _titleController,
+                          focusNode: _titleFocusNode,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            hintText: 'Enter note title',
+                          ),
+                        )
+                      else
+                        Text(
+                          current.title,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Note Content
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.note,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Content',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isEditing)
+                        TextField(
+                          controller: _bodyController,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            hintText: 'Enter note content',
+                          ),
+                          maxLines: 10,
+                        )
+                      else
+                        Text(
+                          current.body,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Timestamps
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Timestamps',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Created: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.createdAt)}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Updated: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.updatedAt)}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Edit Actions
+              if (_isEditing)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = false;
+                          // reset controllers to latest provider value
+                          _titleController.text = current.title;
+                          _bodyController.text = current.body;
+                        });
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _saveChanges,
+                      child: const Text('Save Changes'),
+                    ),
+                  ],
+                ),
             ],
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Note Title
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.title,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Title',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isEditing)
-                      TextField(
-                        controller: _titleController,
-                        focusNode: _titleFocusNode,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Enter note title',
-                        ),
-                      )
-                    else
-                      Text(
-                        current.title,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Note Content
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.note,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Content',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isEditing)
-                      TextField(
-                        controller: _bodyController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Enter note content',
-                        ),
-                        maxLines: 10,
-                      )
-                    else
-                      Text(
-                        current.body,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Timestamps
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Timestamps',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Created: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.createdAt)}',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Updated: ${DateFormat('EEEE, MMMM dd, yyyy - HH:mm').format(current.updatedAt)}',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Edit Actions
-            if (_isEditing)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isEditing = false;
-                        // reset controllers to latest provider value
-                        _titleController.text = current.title;
-                        _bodyController.text = current.body;
-                      });
-                    },
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _saveChanges,
-                    child: const Text('Save Changes'),
-                  ),
-                ],
-              ),
-          ],
         ),
       ),
     );

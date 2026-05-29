@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../providers/medication_provider.dart';
 import '../models/medication.dart';
 
-
 class AddMedicationScreen extends StatefulWidget {
   const AddMedicationScreen({super.key});
 
@@ -21,6 +20,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _minTimeMinutesController = TextEditingController();
 
   bool _notificationsEnabled = false;
+  bool _isSaving = false;
 
   final List<String> _medicationForms = [
     'Tablet',
@@ -36,7 +36,28 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_onControllerChanged);
+    _officialNameController.addListener(_onControllerChanged);
+    _formController.addListener(_onControllerChanged);
+    _maxDosageController.addListener(_onControllerChanged);
+    _minTimeHoursController.addListener(_onControllerChanged);
+    _minTimeMinutesController.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    setState(() {});
+  }
+
+  @override
   void dispose() {
+    _nameController.removeListener(_onControllerChanged);
+    _officialNameController.removeListener(_onControllerChanged);
+    _formController.removeListener(_onControllerChanged);
+    _maxDosageController.removeListener(_onControllerChanged);
+    _minTimeHoursController.removeListener(_onControllerChanged);
+    _minTimeMinutesController.removeListener(_onControllerChanged);
     _nameController.dispose();
     _officialNameController.dispose();
     _formController.dispose();
@@ -46,200 +67,256 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     super.dispose();
   }
 
+  bool get _hasUnsavedChanges =>
+      _nameController.text.isNotEmpty ||
+      _officialNameController.text.isNotEmpty ||
+      _formController.text.isNotEmpty ||
+      _maxDosageController.text.isNotEmpty ||
+      _minTimeHoursController.text.isNotEmpty ||
+      _minTimeMinutesController.text.isNotEmpty ||
+      _notificationsEnabled;
+
+  Future<bool> _showDiscardDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Discard changes?'),
+            content: const Text(
+              'You have unsaved changes. Are you sure you want to discard them?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Medication'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Medication Information',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _nameController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Medication Name *',
-                        hintText: 'e.g., Pain Relief',
-                        border: OutlineInputBorder(),
+    return PopScope(
+      canPop: !_hasUnsavedChanges || _isSaving,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        final bool shouldPop = await _showDiscardDialog();
+        if (shouldPop && context.mounted) {
+          setState(() {
+            _isSaving = true;
+          });
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Add Medication'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        ),
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Medication Information',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a medication name';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _officialNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Official Medication Name *',
-                        hintText: 'e.g., Morphine Sulfate',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter the official medication name';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: _formController.text.isNotEmpty ? _formController.text : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Form *',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _medicationForms.map((String form) {
-                        return DropdownMenuItem<String>(
-                          value: form,
-                          child: Text(form),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _formController.text = newValue ?? '';
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select a form';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _maxDosageController,
-                      decoration: const InputDecoration(
-                        labelText: 'Maximum Dosage *',
-                        hintText: 'e.g., 10',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter maximum dosage';
-                        }
-                        if (double.tryParse(value) == null || double.parse(value) <= 0) {
-                          return 'Please enter a valid dosage amount';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _minTimeHoursController,
-                            decoration: const InputDecoration(
-                              labelText: 'Hours *',
-                              hintText: '0',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Required';
-                              }
-                              final hours = int.tryParse(value);
-                              if (hours == null || hours < 0) {
-                                return 'Invalid';
-                              }
-                              return null;
-                            },
-                          ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _nameController,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Medication Name *',
+                          hintText: 'e.g., Pain Relief',
+                          border: OutlineInputBorder(),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _minTimeMinutesController,
-                            decoration: const InputDecoration(
-                              labelText: 'Minutes *',
-                              hintText: '30',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Required';
-                              }
-                              final minutes = int.tryParse(value);
-                              if (minutes == null || minutes < 0 || minutes >= 60) {
-                                return '0-59';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Minimum time between doses',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter a medication name';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _officialNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Official Medication Name *',
+                          hintText: 'e.g., Morphine Sulfate',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter the official medication name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: _formController.text.isNotEmpty
+                            ? _formController.text
+                            : null,
+                        decoration: const InputDecoration(
+                          labelText: 'Form *',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _medicationForms.map((String form) {
+                          return DropdownMenuItem<String>(
+                            value: form,
+                            child: Text(form),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _formController.text = newValue ?? '';
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a form';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _maxDosageController,
+                        decoration: const InputDecoration(
+                          labelText: 'Maximum Dosage *',
+                          hintText: 'e.g., 10',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter maximum dosage';
+                          }
+                          if (double.tryParse(value) == null ||
+                              double.parse(value) <= 0) {
+                            return 'Please enter a valid dosage amount';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _minTimeHoursController,
+                              decoration: const InputDecoration(
+                                labelText: 'Hours *',
+                                hintText: '0',
+                                border: OutlineInputBorder(),
+                              ),
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Required';
+                                }
+                                final hours = int.tryParse(value);
+                                if (hours == null || hours < 0) {
+                                  return 'Invalid';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _minTimeMinutesController,
+                              decoration: const InputDecoration(
+                                labelText: 'Minutes *',
+                                hintText: '30',
+                                border: OutlineInputBorder(),
+                              ),
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Required';
+                                }
+                                final minutes = int.tryParse(value);
+                                if (minutes == null ||
+                                    minutes < 0 ||
+                                    minutes >= 60) {
+                                  return '0-59';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Minimum time between doses',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notification Settings',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text('Enable Notifications'),
-                      subtitle: const Text('Get reminded when it\'s time for the next dose'),
-                      value: _notificationsEnabled,
-                      onChanged: (bool value) {
-                        setState(() {
-                          _notificationsEnabled = value;
-                        });
-                      },
-                    ),
-                  ],
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notification Settings',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile(
+                        title: const Text('Enable Notifications'),
+                        subtitle: const Text(
+                          'Get reminded when it\'s time for the next dose',
+                        ),
+                        value: _notificationsEnabled,
+                        onChanged: (bool value) {
+                          setState(() {
+                            _notificationsEnabled = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _saveMedication,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: _saveMedication,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Add Medication',
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
-              child: const Text(
-                'Add Medication',
-                style: TextStyle(fontSize: 16),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -249,15 +326,19 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     if (_formKey.currentState!.validate()) {
       final hours = int.parse(_minTimeHoursController.text);
       final minutes = int.parse(_minTimeMinutesController.text);
-      
+
       // Validate that at least one field has a value
       if (hours == 0 && minutes == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter at least 1 minute for the time interval')),
+          const SnackBar(
+            content: Text(
+              'Please enter at least 1 minute for the time interval',
+            ),
+          ),
         );
         return;
       }
-      
+
       final medication = Medication(
         name: _nameController.text,
         officialName: _officialNameController.text,
@@ -268,27 +349,34 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         createdAt: DateTime.now(),
       );
 
-      context.read<MedicationProvider>().addMedication(medication).then((_) {
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Medication added successfully')),
-          );
-        }
-      }).catchError((error) {
-        String errorMessage = error.toString();
-        
-        // Check if it's a notification error and offer to save without notifications
-        if (errorMessage.contains('Failed to set up notifications')) {
-          _showNotificationErrorDialog(medication);
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error adding medication: $error')),
-            );
-          }
-        }
-      });
+      context
+          .read<MedicationProvider>()
+          .addMedication(medication)
+          .then((_) {
+            if (mounted) {
+              setState(() {
+                _isSaving = true;
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Medication added successfully')),
+              );
+            }
+          })
+          .catchError((error) {
+            String errorMessage = error.toString();
+
+            // Check if it's a notification error and offer to save without notifications
+            if (errorMessage.contains('Failed to set up notifications')) {
+              _showNotificationErrorDialog(medication);
+            } else {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error adding medication: $error')),
+                );
+              }
+            }
+          });
     }
   }
 
@@ -313,7 +401,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               // Note: This would need to be implemented with a proper settings opener
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Please enable notifications in your device settings'),
+                  content: Text(
+                    'Please enable notifications in your device settings',
+                  ),
                   duration: Duration(seconds: 5),
                 ),
               );
@@ -326,23 +416,36 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               final medicationWithoutNotifications = medication.copyWith(
                 notificationsEnabled: false,
               );
-              
-              context.read<MedicationProvider>().addMedication(medicationWithoutNotifications).then((_) {
-                if (mounted) {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Close add medication screen
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Medication added without notifications')),
-                  );
-                }
-              }).catchError((error) {
-                if (mounted) {
-                  Navigator.pop(context); // Close dialog
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error adding medication: $error')),
-                  );
-                }
-              });
+
+              context
+                  .read<MedicationProvider>()
+                  .addMedication(medicationWithoutNotifications)
+                  .then((_) {
+                    if (mounted) {
+                      setState(() {
+                        _isSaving = true;
+                      });
+                      Navigator.pop(context); // Close dialog
+                      Navigator.pop(context); // Close add medication screen
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Medication added without notifications',
+                          ),
+                        ),
+                      );
+                    }
+                  })
+                  .catchError((error) {
+                    if (mounted) {
+                      Navigator.pop(context); // Close dialog
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error adding medication: $error'),
+                        ),
+                      );
+                    }
+                  });
             },
             child: const Text('Save Without Notifications'),
           ),
