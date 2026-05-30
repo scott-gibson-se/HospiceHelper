@@ -61,7 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _patientNameController,
-                    autofocus: true,
                     decoration: const InputDecoration(
                       labelText: 'Patient Name',
                       hintText: 'Enter the patient\'s name',

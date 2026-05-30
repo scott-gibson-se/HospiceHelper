@@ -46,7 +46,8 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Discard changes?'),
             content: const Text(
-                'You have unsaved changes. Are you sure you want to discard them?'),
+              'You have unsaved changes. Are you sure you want to discard them?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -120,35 +121,36 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
         }
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
           title: const Text('Add Note'),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _titleController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Note Title',
-                    border: OutlineInputBorder(),
-                    hintText: 'Enter a title for your note',
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: _titleController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Note Title',
+                      border: OutlineInputBorder(),
+                      hintText: 'Enter a title for your note',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter a title';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a title';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: TextFormField(
+                  const SizedBox(height: 16),
+                  TextFormField(
                     controller: _bodyController,
                     decoration: const InputDecoration(
                       labelText: 'Note Content',
@@ -156,8 +158,8 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                       hintText: 'Enter your note content here',
                       alignLabelWithHint: true,
                     ),
-                    maxLines: null,
-                    expands: true,
+                    minLines: 5,
+                    maxLines: 12,
                     textAlignVertical: TextAlignVertical.top,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -166,21 +168,21 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                       return null;
                     },
                   ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _saveNote,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _saveNote,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    child: const Text(
+                      'Save Note',
+                      style: TextStyle(fontSize: 16),
+                    ),
                   ),
-                  child: const Text(
-                    'Save Note',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

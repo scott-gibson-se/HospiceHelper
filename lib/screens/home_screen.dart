@@ -25,21 +25,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
-  late TabController _questionsTabController;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this, initialIndex: 0);
-    _questionsTabController = TabController(length: 3, vsync: this, initialIndex: 0);
-    _tabController.addListener(() {
-      setState(() {}); // Rebuild when tab changes to update FAB
-    });
-    _questionsTabController.addListener(() {
-      setState(() {}); // Rebuild when questions filter tab changes
-    });
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MedicationProvider>().loadMedications();
@@ -53,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
-    _questionsTabController.dispose();
     super.dispose();
   }
 
@@ -77,18 +69,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(
-              text: 'Medications',
-              icon: Icon(Icons.medication),
-            ),
-            Tab(
-              text: 'Questions',
-              icon: Icon(Icons.help_outline),
-            ),
-            Tab(
-              text: 'Notes',
-              icon: Icon(Icons.note),
-            ),
+            Tab(text: 'Medications', icon: Icon(Icons.medication)),
+            Tab(text: 'Questions', icon: Icon(Icons.help_outline)),
+            Tab(text: 'Notes', icon: Icon(Icons.note)),
           ],
         ),
         actions: [
@@ -107,9 +90,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const DoseLogScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const DoseLogScreen()),
               );
             },
             tooltip: 'View Dose History',
@@ -119,9 +100,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
               );
             },
             tooltip: 'Settings',
@@ -132,27 +111,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
         controller: _tabController,
         children: [
           _buildMedicationsTab(),
-          _buildQuestionsTab(),
+          const _QuestionsTab(),
           _buildNotesTab(),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'add_fab',
-            tooltip: _addFabTooltip,
-            onPressed: _onAddPressed,
-            child: const Icon(Icons.add),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton(
-            heroTag: 'reports_fab',
-            tooltip: _reportsFabTooltip,
-            onPressed: _openReportsScreen,
-            child: const Icon(Icons.assessment),
-          ),
-        ],
+      floatingActionButton: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, child) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton.small(
+                heroTag: 'add_fab',
+                tooltip: _addFabTooltip,
+                onPressed: _onAddPressed,
+                child: const Icon(Icons.add),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton(
+                heroTag: 'reports_fab',
+                tooltip: _reportsFabTooltip,
+                onPressed: _openReportsScreen,
+                child: const Icon(Icons.assessment),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -194,9 +178,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     if (_tabController.index == 0) {
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (context) => const AddMedicationScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const AddMedicationScreen()),
       );
       if (mounted) {
         context.read<MedicationProvider>().loadMedications();
@@ -204,23 +186,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     } else if (_tabController.index == 1) {
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (context) => const AddQuestionScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const AddQuestionScreen()),
       );
-      if (mounted) {
-        context.read<QuestionProvider>().loadQuestions();
-      }
+      // addQuestion already updates the provider; no reload needed
     } else {
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (context) => const AddNoteScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const AddNoteScreen()),
       );
-      if (mounted) {
-        context.read<NoteProvider>().loadNotes();
-      }
+      // addNote already updates the provider; no reload needed
     }
   }
 
@@ -259,24 +233,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.medication,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
+                Icon(Icons.medication, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
                   'No medications added yet',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Tap the + button to add your first medication',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[500],
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
                 ),
               ],
             ),
@@ -294,21 +264,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             itemBuilder: (context, index) {
               final medication = medicationProvider.medications[index];
               final isDue = medicationProvider.isMedicationDue(medication);
-              final timeUntilNext = medicationProvider.getTimeUntilNextDose(medication);
-              final lastDose = medicationProvider.doseLogs
-                  .where((d) => d.medicationId == medication.id)
-                  .isNotEmpty
-                  ? medicationProvider.doseLogs
+              final timeUntilNext = medicationProvider.getTimeUntilNextDose(
+                medication,
+              );
+              final lastDose =
+                  medicationProvider.doseLogs
                       .where((d) => d.medicationId == medication.id)
-                      .reduce((a, b) => a.dateTime.isAfter(b.dateTime) ? a : b)
+                      .isNotEmpty
+                  ? medicationProvider.doseLogs
+                        .where((d) => d.medicationId == medication.id)
+                        .reduce(
+                          (a, b) => a.dateTime.isAfter(b.dateTime) ? a : b,
+                        )
                   : null;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: isDue 
-                        ? Colors.red[100] 
+                    backgroundColor: isDue
+                        ? Colors.red[100]
                         : Colors.green[100],
                     child: Icon(
                       Icons.medication,
@@ -322,7 +297,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${medication.form} • Max: ${medication.maxDosage} • Interval: ${medication.formattedTimeInterval}'),
+                      Text(
+                        '${medication.form} • Max: ${medication.maxDosage} • Interval: ${medication.formattedTimeInterval}',
+                      ),
                       if (lastDose != null)
                         Text(
                           'Last dose: ${lastDose.doseGiven} ${medication.form}',
@@ -354,8 +331,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                     children: [
                       if (isDue)
                         IconButton(
-                          icon: const Icon(Icons.add_circle, color: Colors.green),
-                          onPressed: () => _showLogDoseDialog(context, medication),
+                          icon: const Icon(
+                            Icons.add_circle,
+                            color: Colors.green,
+                          ),
+                          onPressed: () =>
+                              _showLogDoseDialog(context, medication),
                           tooltip: 'Log Dose',
                         ),
                       IconButton(
@@ -364,7 +345,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => MedicationDetailScreen(medication: medication),
+                              builder: (context) => MedicationDetailScreen(
+                                medication: medication,
+                              ),
                             ),
                           );
                         },
@@ -376,7 +359,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => MedicationDetailScreen(medication: medication),
+                        builder: (context) =>
+                            MedicationDetailScreen(medication: medication),
                       ),
                     );
                   },
@@ -386,184 +370,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           ),
         );
       },
-    );
-  }
-
-  Widget _buildQuestionsTab() {
-    return Consumer<QuestionProvider>(
-      builder: (context, questionProvider, child) {
-        if (questionProvider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        return Column(
-          children: [
-            // Sub-tabs for filtering questions
-            Container(
-              color: Theme.of(context).colorScheme.surface,
-              child: TabBar(
-                controller: _questionsTabController,
-                tabs: const [
-                  Tab(
-                    text: 'All',
-                    icon: Icon(Icons.list),
-                  ),
-                  Tab(
-                    text: 'Pending',
-                    icon: Icon(Icons.pending),
-                  ),
-                  Tab(
-                    text: 'Answered',
-                    icon: Icon(Icons.check_circle),
-                  ),
-                ],
-              ),
-            ),
-            // Tab content
-            Expanded(
-              child: TabBarView(
-                controller: _questionsTabController,
-                children: [
-                  _buildQuestionsList(questionProvider.questions, questionProvider),
-                  _buildQuestionsList(questionProvider.unansweredQuestions, questionProvider),
-                  _buildQuestionsList(questionProvider.answeredQuestions, questionProvider),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildQuestionsList(List<Question> questions, QuestionProvider questionProvider) {
-    if (questions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.help_outline,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No questions found',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap the + button to add a new question',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () => questionProvider.loadQuestions(),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: questions.length,
-        itemBuilder: (context, index) {
-          final question = questions[index];
-          return _buildQuestionCard(question);
-        },
-      ),
-    );
-  }
-
-  Widget _buildQuestionCard(Question question) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: question.isAnswered 
-              ? Colors.green.shade100 
-              : Colors.orange.shade100,
-          child: Icon(
-            question.isAnswered ? Icons.check : Icons.help_outline,
-            color: question.isAnswered 
-                ? Colors.green.shade700 
-                : Colors.orange.shade700,
-          ),
-        ),
-        title: Text(
-          question.title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              question.questionText,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time,
-                  size: 16,
-                  color: Colors.grey.shade500,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  DateFormat('MMM dd, yyyy - HH:mm').format(question.dateEntered),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: question.isAnswered 
-                        ? Colors.green.shade100 
-                        : Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    question.status,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: question.isAnswered 
-                          ? Colors.green.shade700 
-                          : Colors.orange.shade700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        onTap: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => QuestionDetailScreen(question: question),
-            ),
-          );
-          // Refresh questions when returning from detail screen
-          if (mounted) {
-            context.read<QuestionProvider>().loadQuestions();
-          }
-        },
-      ),
     );
   }
 
@@ -579,24 +385,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.note,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
+                Icon(Icons.note, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
                   'No notes added yet',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Tap the + button to add your first note',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[500],
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
                 ),
               ],
             ),
@@ -623,13 +425,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: note.isModified 
-              ? Colors.blue.shade100 
+          backgroundColor: note.isModified
+              ? Colors.blue.shade100
               : Colors.green.shade100,
           child: Icon(
             note.isModified ? Icons.edit : Icons.note,
-            color: note.isModified 
-                ? Colors.blue.shade700 
+            color: note.isModified
+                ? Colors.blue.shade700
                 : Colors.green.shade700,
           ),
         ),
@@ -647,32 +449,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               note.body,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(
-                  Icons.access_time,
-                  size: 16,
-                  color: Colors.grey.shade500,
-                ),
+                Icon(Icons.access_time, size: 16, color: Colors.grey.shade500),
                 const SizedBox(width: 4),
                 Text(
                   DateFormat('MMM dd, yyyy - HH:mm').format(note.updatedAt),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: note.isModified 
-                        ? Colors.blue.shade100 
+                    color: note.isModified
+                        ? Colors.blue.shade100
                         : Colors.green.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -681,8 +477,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: note.isModified 
-                          ? Colors.blue.shade700 
+                      color: note.isModified
+                          ? Colors.blue.shade700
                           : Colors.green.shade700,
                     ),
                   ),
@@ -700,6 +496,217 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           // Refresh notes when returning from detail screen
           if (mounted) {
             context.read<NoteProvider>().loadNotes();
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _QuestionsTab extends StatefulWidget {
+  const _QuestionsTab();
+
+  @override
+  State<_QuestionsTab> createState() => _QuestionsTabState();
+}
+
+class _QuestionsTabState extends State<_QuestionsTab>
+    with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
+  int _filterIndex = 0;
+
+  static const _filterLabels = ['All', 'Pending', 'Answered'];
+
+  @override
+  bool get wantKeepAlive => true;
+
+  List<Question> _questionsForFilter(QuestionProvider provider) {
+    switch (_filterIndex) {
+      case 1:
+        return provider.unansweredQuestions;
+      case 2:
+        return provider.answeredQuestions;
+      default:
+        return provider.questions;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    return Consumer<QuestionProvider>(
+      builder: (context, questionProvider, child) {
+        if (questionProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final questions = _questionsForFilter(questionProvider);
+        final list = _buildQuestionsList(questions, questionProvider);
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Skip the filter bar when height is too tight (e.g. keyboard
+            // inset animating while this offstage tab is still being laid out).
+            if (constraints.maxHeight < 120) {
+              return list;
+            }
+
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                  child: SegmentedButton<int>(
+                    segments: List.generate(
+                      _filterLabels.length,
+                      (index) => ButtonSegment<int>(
+                        value: index,
+                        label: Text(_filterLabels[index]),
+                      ),
+                    ),
+                    selected: {_filterIndex},
+                    onSelectionChanged: (selected) {
+                      setState(() => _filterIndex = selected.first);
+                    },
+                  ),
+                ),
+                Expanded(child: list),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildQuestionsList(
+    List<Question> questions,
+    QuestionProvider questionProvider,
+  ) {
+    if (questions.isEmpty) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.help_outline, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No questions found',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap the + button to add a new question',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => questionProvider.loadQuestions(),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(8),
+        itemCount: questions.length,
+        itemBuilder: (context, index) {
+          final question = questions[index];
+          return _buildQuestionCard(question);
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuestionCard(Question question) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: question.isAnswered
+              ? Colors.green.shade100
+              : Colors.orange.shade100,
+          child: Icon(
+            question.isAnswered ? Icons.check : Icons.help_outline,
+            color: question.isAnswered
+                ? Colors.green.shade700
+                : Colors.orange.shade700,
+          ),
+        ),
+        title: Text(
+          question.title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              question.questionText,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text(
+                  DateFormat(
+                    'MMM dd, yyyy - HH:mm',
+                  ).format(question.dateEntered),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: question.isAnswered
+                        ? Colors.green.shade100
+                        : Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    question.status,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: question.isAnswered
+                          ? Colors.green.shade700
+                          : Colors.orange.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => QuestionDetailScreen(question: question),
+            ),
+          );
+          if (mounted) {
+            context.read<QuestionProvider>().loadQuestions();
           }
         },
       ),
