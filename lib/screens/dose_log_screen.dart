@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/medication_provider.dart';
 import '../models/dose_log.dart';
 import '../models/medication.dart';
+import '../utils/date_range_utils.dart';
 import 'log_dose_screen.dart';
 
 class DoseLogScreen extends StatefulWidget {
@@ -15,10 +16,19 @@ class DoseLogScreen extends StatefulWidget {
 
 class _DoseLogScreenState extends State<DoseLogScreen> {
   Map<int, Medication> _medicationCache = {};
+  late DateTime _fromDate;
+  late DateTime _toDate;
+  late TimeOfDay _fromTime;
+  late TimeOfDay _toTime;
+  int? _selectedMedicationId;
 
   @override
   void initState() {
     super.initState();
+    _fromDate = DateRangeUtils.defaultLastWeekFromDate();
+    _toDate = DateRangeUtils.defaultToDate();
+    _fromTime = const TimeOfDay(hour: 0, minute: 0);
+    _toTime = const TimeOfDay(hour: 23, minute: 59);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -26,15 +36,17 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
 
   Future<void> _loadData() async {
     final provider = context.read<MedicationProvider>();
+    await provider.loadMedications();
     await provider.loadDoseLogs();
-    
-    // Pre-load medication data to avoid async lookups during scrolling
     await _preloadMedications(provider);
   }
 
   Future<void> _preloadMedications(MedicationProvider provider) async {
-    final medicationIds = provider.doseLogs.map((log) => log.medicationId).toSet();
-    
+    final medicationIds = {
+      ...provider.doseLogs.map((log) => log.medicationId),
+      ...provider.medications.map((med) => med.id!),
+    };
+
     for (final id in medicationIds) {
       if (!_medicationCache.containsKey(id)) {
         try {
@@ -47,10 +59,86 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
         }
       }
     }
-    
+
     if (mounted) {
       setState(() {});
     }
+  }
+
+  List<DoseLog> _filterDoseLogs(List<DoseLog> doseLogs) {
+    return doseLogs.where((log) {
+      if (!DateRangeUtils.isInRange(log.dateTime, _fromDate, _toDate)) {
+        return false;
+      }
+      if (!DateRangeUtils.isTimeOfDayInRange(
+        log.dateTime,
+        _fromTime.hour,
+        _fromTime.minute,
+        _toTime.hour,
+        _toTime.minute,
+      )) {
+        return false;
+      }
+      if (_selectedMedicationId != null &&
+          log.medicationId != _selectedMedicationId) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Future<void> _pickFromDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _fromDate,
+      firstDate: DateTime(2020),
+      lastDate: _toDate,
+    );
+    if (date != null) {
+      setState(() {
+        _fromDate = DateTime(date.year, date.month, date.day);
+      });
+    }
+  }
+
+  Future<void> _pickToDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _toDate,
+      firstDate: _fromDate,
+      lastDate: DateTime.now(),
+    );
+    if (date != null) {
+      setState(() {
+        _toDate = DateTime(date.year, date.month, date.day);
+      });
+    }
+  }
+
+  Future<void> _pickFromTime() async {
+    final time = await showTimePicker(context: context, initialTime: _fromTime);
+    if (time != null) {
+      setState(() => _fromTime = time);
+    }
+  }
+
+  Future<void> _pickToTime() async {
+    final time = await showTimePicker(context: context, initialTime: _toTime);
+    if (time != null) {
+      setState(() => _toTime = time);
+    }
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final now = DateTime.now();
+    final dateTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    return DateFormat('h:mm a').format(dateTime);
   }
 
   @override
@@ -66,128 +154,25 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
       ),
       body: Consumer<MedicationProvider>(
         builder: (context, provider, child) {
-          if (provider.doseLogs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+          final filteredLogs = _filterDoseLogs(provider.doseLogs);
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxHeight < 120) {
+                return _buildDoseList(filteredLogs, provider.doseLogs.isEmpty);
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.history,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No doses logged yet',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Doses will appear here once they are logged',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[500],
+                  _buildFilterPanel(provider),
+                  Expanded(
+                    child: _buildDoseList(
+                      filteredLogs,
+                      provider.doseLogs.isEmpty,
                     ),
                   ),
                 ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: provider.doseLogs.length,
-            itemBuilder: (context, index) {
-              final doseLog = provider.doseLogs[index];
-              final medication = _medicationCache[doseLog.medicationId];
-              
-              if (medication == null) {
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: const Icon(Icons.error, color: Colors.red),
-                    title: const Text('Unknown Medication'),
-                    subtitle: Text('Dose logged on ${DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime)}'),
-                  ),
-                );
-              }
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getMedicationColor(medication),
-                    child: const Icon(Icons.medication, color: Colors.white),
-                  ),
-                  title: Text(
-                    medication.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${doseLog.doseGiven} ${medication.form}'),
-                      Text(
-                        'Given by: ${doseLog.givenBy}',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
-                      ),
-                      Text(
-                        DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime),
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
-                      ),
-                      if (doseLog.note != null && doseLog.note!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Note: ${doseLog.note}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _showEditDoseDialog(context, doseLog, medication);
-                      } else if (value == 'delete') {
-                        _showDeleteConfirmation(context, doseLog);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, color: Colors.blue),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               );
             },
           );
@@ -196,9 +181,313 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
     );
   }
 
+  Widget _buildFilterPanel(MedicationProvider provider) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Filters', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 360;
+                final dateFrom = _buildFilterTile(
+                  icon: Icons.date_range,
+                  label: 'From Date',
+                  value: DateFormat('MMM dd, yyyy').format(_fromDate),
+                  onTap: _pickFromDate,
+                );
+                final dateTo = _buildFilterTile(
+                  icon: Icons.event,
+                  label: 'To Date',
+                  value: DateFormat('MMM dd, yyyy').format(_toDate),
+                  onTap: _pickToDate,
+                );
+                if (narrow) {
+                  return Column(children: [dateFrom, dateTo]);
+                }
+                return Row(
+                  children: [
+                    Expanded(child: dateFrom),
+                    const SizedBox(width: 8),
+                    Expanded(child: dateTo),
+                  ],
+                );
+              },
+            ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 360;
+                final timeFrom = _buildFilterTile(
+                  icon: Icons.access_time,
+                  label: 'From Time',
+                  value: _formatTime(_fromTime),
+                  onTap: _pickFromTime,
+                );
+                final timeTo = _buildFilterTile(
+                  icon: Icons.schedule,
+                  label: 'To Time',
+                  value: _formatTime(_toTime),
+                  onTap: _pickToTime,
+                );
+                if (narrow) {
+                  return Column(children: [timeFrom, timeTo]);
+                }
+                return Row(
+                  children: [
+                    Expanded(child: timeFrom),
+                    const SizedBox(width: 8),
+                    Expanded(child: timeTo),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            DropdownButtonFormField<int?>(
+              value: _selectedMedicationId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Medication',
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('All medications'),
+                ),
+                ...provider.medications.map(
+                  (med) => DropdownMenuItem<int?>(
+                    value: med.id,
+                    child: Text(med.name, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => _selectedMedicationId = value);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDoseList(List<DoseLog> filteredLogs, bool hasNoDoseLogs) {
+    if (hasNoDoseLogs) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.history, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No doses logged yet',
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Doses will appear here once they are logged',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (filteredLogs.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.filter_list_off, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No doses match filters',
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Try adjusting the date, time, or medication filters',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: filteredLogs.length,
+      itemBuilder: (context, index) {
+        final doseLog = filteredLogs[index];
+        final medication = _medicationCache[doseLog.medicationId];
+
+        if (medication == null) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              isThreeLine: true,
+              leading: const Icon(Icons.error, color: Colors.red),
+              title: const Text('Unknown Medication'),
+              subtitle: Text(
+                'Dose logged on ${DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime)}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          );
+        }
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            isThreeLine: true,
+            leading: CircleAvatar(
+              backgroundColor: _getMedicationColor(medication),
+              child: const Icon(Icons.medication, color: Colors.white),
+            ),
+            title: Text(
+              medication.name,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${doseLog.doseGiven} ${medication.form}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'Given by: ${doseLog.givenBy}',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+                Text(
+                  DateFormat('MMM dd, yyyy - hh:mm a').format(doseLog.dateTime),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+                if (doseLog.note != null && doseLog.note!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Note: ${doseLog.note}',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _showEditDoseDialog(context, doseLog, medication);
+                } else if (value == 'delete') {
+                  _showDeleteConfirmation(context, doseLog);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Color _getMedicationColor(Medication medication) {
-    // Generate a consistent color based on medication name
     final colors = [
       Colors.blue,
       Colors.green,
@@ -232,9 +521,10 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
               Navigator.pop(context);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Dose log deleted successfully')),
+                  const SnackBar(
+                    content: Text('Dose log deleted successfully'),
+                  ),
                 );
-                // Refresh the medication cache after deletion
                 await _preloadMedications(context.read<MedicationProvider>());
               }
             },
@@ -268,7 +558,11 @@ class _DoseLogScreenState extends State<DoseLogScreen> {
     );
   }
 
-  void _showEditDoseDialog(BuildContext context, DoseLog doseLog, Medication medication) {
+  void _showEditDoseDialog(
+    BuildContext context,
+    DoseLog doseLog,
+    Medication medication,
+  ) {
     final provider = context.read<MedicationProvider>();
     _showDoseDialog(
       context: context,
