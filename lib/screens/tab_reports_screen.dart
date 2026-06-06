@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/dose_log.dart';
+import '../models/medication.dart';
 import '../models/note.dart';
 import '../models/question.dart';
 import '../providers/medication_provider.dart';
@@ -32,12 +33,19 @@ class TabReportsScreen extends StatefulWidget {
 class _TabReportsScreenState extends State<TabReportsScreen> {
   late DateTime _reportFromDate;
   late DateTime _reportToDate;
+  int? _selectedMedicationId;
 
   @override
   void initState() {
     super.initState();
     _reportFromDate = DateRangeUtils.defaultFromDate();
     _reportToDate = DateRangeUtils.defaultToDate();
+    if (widget.reportTab == ReportTab.medications) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<MedicationProvider>().loadMedications();
+        context.read<MedicationProvider>().loadDoseLogs();
+      });
+    }
   }
 
   String get _screenTitle {
@@ -67,16 +75,29 @@ class _TabReportsScreenState extends State<TabReportsScreen> {
       case ReportTab.medications:
         return [
           _ReportOption(
-            title: 'Medication & Dose History Report',
-            subtitle: 'Medication summary and dose history for the selected dates',
+            title: 'Medications',
+            subtitle: 'Summary of all configured medications',
             icon: Icons.medication,
-            onGenerate: _generateMedicationReport,
+            onGenerate: _generateMedicationsReport,
+          ),
+          _ReportOption(
+            title: 'Dose History Report',
+            subtitle: 'Dose history for the selected dates',
+            icon: Icons.history,
+            onGenerate: _generateDoseHistoryReport,
           ),
           _ReportOption(
             title: 'Medication Dose Grid Report',
             subtitle: 'Daily dose totals by medication, grouped by calendar month',
             icon: Icons.table_chart,
             onGenerate: _generateMedicationDoseGridReport,
+          ),
+          _ReportOption(
+            title: 'Medication Dose Active Report',
+            subtitle:
+                'Active medication amount at each dose using the min time between doses look-back',
+            icon: Icons.monitor_heart,
+            onGenerate: _generateMedicationDoseActiveReport,
           ),
         ];
       case ReportTab.questions:
@@ -144,6 +165,40 @@ class _TabReportsScreenState extends State<TabReportsScreen> {
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (widget.reportTab == ReportTab.medications) ...[
+                    const SizedBox(height: 16),
+                    Consumer<MedicationProvider>(
+                      builder: (context, provider, child) {
+                        return DropdownButtonFormField<int?>(
+                          value: _selectedMedicationId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Medication',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('All medications'),
+                            ),
+                            ...provider.medications.map(
+                              (med) => DropdownMenuItem<int?>(
+                                value: med.id,
+                                child: Text(
+                                  med.name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _selectedMedicationId = value);
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -208,9 +263,27 @@ class _TabReportsScreenState extends State<TabReportsScreen> {
   }
 
   List<DoseLog> _filterDoseLogsByDateRange(List<DoseLog> doseLogs) {
-    return doseLogs
-        .where((log) => DateRangeUtils.isInRange(log.dateTime, _reportFromDate, _reportToDate))
-        .toList();
+    return doseLogs.where((log) {
+      if (!DateRangeUtils.isInRange(log.dateTime, _reportFromDate, _reportToDate)) {
+        return false;
+      }
+      if (_selectedMedicationId != null && log.medicationId != _selectedMedicationId) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Medication? _selectedMedication(List<Medication> medications) {
+    if (_selectedMedicationId == null) {
+      return null;
+    }
+    for (final medication in medications) {
+      if (medication.id == _selectedMedicationId) {
+        return medication;
+      }
+    }
+    return null;
   }
 
   List<Question> _filterQuestionsByDateRange(List<Question> questions) {
@@ -277,7 +350,33 @@ class _TabReportsScreenState extends State<TabReportsScreen> {
     }
   }
 
-  Future<void> _generateMedicationReport() async {
+  List<Medication> _medicationsForReport(List<Medication> medications) {
+    final selected = _selectedMedication(medications);
+    if (selected != null) {
+      return [selected];
+    }
+    return medications;
+  }
+
+  Future<void> _generateMedicationsReport() async {
+    final provider = context.read<MedicationProvider>();
+    if (provider.medications.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No medications to generate report for')),
+      );
+      return;
+    }
+
+    await _runReportGeneration(
+      generate: () => PdfReportService.generateMedicationsReportFile(
+        _medicationsForReport(provider.medications),
+        reportStartDate: _reportFromDate,
+        reportEndDate: _reportToDate,
+      ),
+    );
+  }
+
+  Future<void> _generateDoseHistoryReport() async {
     final provider = context.read<MedicationProvider>();
     if (provider.medications.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -288,11 +387,40 @@ class _TabReportsScreenState extends State<TabReportsScreen> {
 
     final doseLogs = _filterDoseLogsByDateRange(provider.doseLogs);
     await _runReportGeneration(
-      generate: () => PdfReportService.generateMedicationReportFile(
+      generate: () => PdfReportService.generateDoseHistoryReportFile(
         provider.medications,
         doseLogs,
         reportStartDate: _reportFromDate,
         reportEndDate: _reportToDate,
+      ),
+    );
+  }
+
+  Future<void> _generateMedicationDoseActiveReport() async {
+    final provider = context.read<MedicationProvider>();
+    if (provider.medications.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No medications to generate report for')),
+      );
+      return;
+    }
+
+    final reportDoseLogs = _filterDoseLogsByDateRange(provider.doseLogs);
+    if (reportDoseLogs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No doses in the selected date range')),
+      );
+      return;
+    }
+
+    await _runReportGeneration(
+      generate: () => PdfReportService.generateMedicationDoseActiveReportFile(
+        provider.medications,
+        provider.doseLogs,
+        reportDoseLogs,
+        reportStartDate: _reportFromDate,
+        reportEndDate: _reportToDate,
+        filteredMedication: _selectedMedication(provider.medications),
       ),
     );
   }

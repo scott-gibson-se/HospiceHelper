@@ -49,19 +49,40 @@ class PdfReportService {
     return file.path;
   }
 
-  /// Generates a PDF report and returns the file path for manual sharing
-  static Future<String> generateMedicationReportFile(
+  static Future<String> generateMedicationsReportFile(
+    List<Medication> medications, {
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+  }) async {
+    try {
+      final patientName = await SettingsService.getPatientName();
+      final pdf = await PdfService.generateMedicationsReport(
+        medications,
+        patientName: patientName,
+        reportStartDate: reportStartDate,
+        reportEndDate: reportEndDate,
+      );
+
+      return await _saveReportFile(
+        pdf,
+        'Hospice_Medications_Report',
+        reportStartDate,
+        reportEndDate,
+      );
+    } catch (e) {
+      throw Exception('Failed to generate medications PDF report: $e');
+    }
+  }
+
+  static Future<String> generateDoseHistoryReportFile(
     List<Medication> medications,
     List<DoseLog> doseLogs, {
     required DateTime reportStartDate,
     required DateTime reportEndDate,
   }) async {
     try {
-      // Get patient name from settings
       final patientName = await SettingsService.getPatientName();
-      
-      // Generate PDF report
-      final pdf = await PdfService.generateMedicationReport(
+      final pdf = await PdfService.generateDoseHistoryReport(
         medications,
         doseLogs,
         patientName: patientName,
@@ -71,12 +92,43 @@ class PdfReportService {
 
       return await _saveReportFile(
         pdf,
-        'Hospice_Medication_Report',
+        'Hospice_Dose_History_Report',
         reportStartDate,
         reportEndDate,
       );
     } catch (e) {
-      throw Exception('Failed to generate PDF report: $e');
+      throw Exception('Failed to generate dose history PDF report: $e');
+    }
+  }
+
+  static Future<String> generateMedicationDoseActiveReportFile(
+    List<Medication> medications,
+    List<DoseLog> allDoseLogs,
+    List<DoseLog> reportDoseLogs, {
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+    Medication? filteredMedication,
+  }) async {
+    try {
+      final patientName = await SettingsService.getPatientName();
+      final pdf = await PdfService.generateMedicationDoseActiveReport(
+        medications,
+        allDoseLogs,
+        reportDoseLogs,
+        patientName: patientName,
+        reportStartDate: reportStartDate,
+        reportEndDate: reportEndDate,
+        filteredMedication: filteredMedication,
+      );
+
+      return await _saveReportFile(
+        pdf,
+        'Hospice_Medication_Dose_Active_Report',
+        reportStartDate,
+        reportEndDate,
+      );
+    } catch (e) {
+      throw Exception('Failed to generate medication dose active PDF report: $e');
     }
   }
 

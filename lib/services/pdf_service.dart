@@ -5,9 +5,43 @@ import '../models/medication.dart';
 import '../models/dose_log.dart';
 import '../models/question.dart';
 import '../models/note.dart';
+import '../utils/medication_dose_utils.dart';
 
 class PdfService {
-  static Future<pw.Document> generateMedicationReport(
+  static Future<pw.Document> generateMedicationsReport(
+    List<Medication> medications, {
+    String? patientName,
+    DateTime? reportStartDate,
+    DateTime? reportEndDate,
+  }) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildHeader(
+                title: 'Hospice Medications Report',
+                patientName: patientName,
+                reportStartDate: reportStartDate,
+                reportEndDate: reportEndDate,
+              ),
+              pw.SizedBox(height: 24),
+              _buildMedicationSummary(medications),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  static Future<pw.Document> generateDoseHistoryReport(
     List<Medication> medications,
     List<DoseLog> doseLogs, {
     String? patientName,
@@ -16,14 +50,13 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
 
-    // Add header page
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
           return _buildHeader(
-            title: 'Hospice Medication Report',
+            title: 'Hospice Dose History Report',
             patientName: patientName,
             reportStartDate: reportStartDate,
             reportEndDate: reportEndDate,
@@ -32,18 +65,6 @@ class PdfService {
       ),
     );
 
-    // Add medication summary page
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return _buildMedicationSummary(medications);
-        },
-      ),
-    );
-
-    // Add dose history with proper pagination
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -128,6 +149,173 @@ class PdfService {
     }
 
     return pdf;
+  }
+
+  static Future<pw.Document> generateMedicationDoseActiveReport(
+    List<Medication> medications,
+    List<DoseLog> allDoseLogs,
+    List<DoseLog> reportDoseLogs, {
+    String? patientName,
+    required DateTime reportStartDate,
+    required DateTime reportEndDate,
+    Medication? filteredMedication,
+  }) async {
+    final pdf = pw.Document();
+    final medicationMap = {for (final med in medications) med.id!: med};
+    final sortedLogs = List<DoseLog>.from(reportDoseLogs)
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildHeader(
+                title: 'Hospice Medication Dose Active Report',
+                patientName: patientName,
+                reportStartDate: reportStartDate,
+                reportEndDate: reportEndDate,
+              ),
+              pw.SizedBox(height: 16),
+              if (filteredMedication != null) ...[
+                pw.Text(
+                  'Medication: ${filteredMedication.name}',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 8),
+              ],
+              pw.Text(
+                'Active amount is calculated using each medication\'s Min Time Between Doses '
+                'as the look-back window at the moment each dose was administered.',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        maxPages: 100,
+        build: (pw.Context context) {
+          return [
+            pw.Text(
+              'Dose Active Amounts',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 12),
+            _buildDoseActiveTable(
+              sortedLogs,
+              medicationMap,
+              allDoseLogs,
+            ),
+          ];
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  static pw.Widget _buildDoseActiveTable(
+    List<DoseLog> doseLogs,
+    Map<int, Medication> medicationMap,
+    List<DoseLog> allDoseLogs,
+  ) {
+    if (doseLogs.isEmpty) {
+      return pw.Text(
+        'No doses in the selected date range',
+        style: pw.TextStyle(
+          fontSize: 12,
+          color: PdfColors.grey600,
+        ),
+      );
+    }
+
+    final headers = [
+      'Date & Time',
+      'Medication',
+      'Dose Given',
+      'Active Before',
+      'Active After',
+      'Max Dosage',
+      'Given By',
+    ];
+    final data = doseLogs.map((log) {
+      final medication = medicationMap[log.medicationId];
+      final form = medication?.form ?? '';
+      final activeBefore = medication == null
+          ? ''
+          : _formatDoseAmount(
+              MedicationDoseUtils.getActiveDoseBeforeTime(
+                medication,
+                allDoseLogs,
+                log.dateTime,
+              ),
+            );
+      final activeAfter = medication == null
+          ? ''
+          : _formatDoseAmount(
+              MedicationDoseUtils.getActiveDoseAtTime(
+                medication,
+                allDoseLogs,
+                log.dateTime,
+              ),
+            );
+
+      return [
+        DateFormat('MMM dd, yyyy hh:mm a').format(log.dateTime),
+        medication?.name ?? 'Unknown',
+        '${_formatDoseAmount(log.doseGiven)} $form'.trim(),
+        activeBefore.isEmpty ? '' : '$activeBefore $form'.trim(),
+        activeAfter.isEmpty ? '' : '$activeAfter $form'.trim(),
+        medication == null ? '' : '${medication.maxDosage} $form'.trim(),
+        log.givenBy,
+      ];
+    }).toList();
+
+    return pw.Table.fromTextArray(
+      headers: headers,
+      data: data,
+      headerStyle: pw.TextStyle(
+        fontSize: 9,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(
+        color: PdfColors.grey800,
+      ),
+      cellStyle: const pw.TextStyle(
+        fontSize: 8,
+      ),
+      cellAlignment: pw.Alignment.centerLeft,
+      cellPadding: const pw.EdgeInsets.all(6),
+      border: pw.TableBorder.all(color: PdfColors.grey300),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(1.6),
+        1: const pw.FlexColumnWidth(1.4),
+        2: const pw.FlexColumnWidth(1),
+        3: const pw.FlexColumnWidth(1),
+        4: const pw.FlexColumnWidth(1),
+        5: const pw.FlexColumnWidth(1),
+        6: const pw.FlexColumnWidth(1.2),
+      },
+    );
   }
 
   static List<DateTime> _monthsInRange(DateTime startDate, DateTime endDate) {

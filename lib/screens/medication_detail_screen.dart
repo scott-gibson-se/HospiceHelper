@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../providers/medication_provider.dart';
 import '../models/medication.dart';
 import '../models/dose_log.dart';
+import '../utils/medication_dose_utils.dart';
 import 'edit_medication_screen.dart';
 import 'log_dose_screen.dart';
 
@@ -87,15 +88,11 @@ class _MedicationDetailScreenState extends State<MedicationDetailScreen> {
 
 
   double _getTotalDosesInLastInterval(Medication medication, List<DoseLog> doseLogs) {
-    final medicationLogs = doseLogs.where((log) => log.medicationId == medication.id);
-    if (medicationLogs.isEmpty) return 0.0;
-
-    final now = DateTime.now();
-    final intervalStart = now.subtract(Duration(minutes: medication.minTimeBetweenDoses));
-
-    return medicationLogs
-        .where((log) => log.dateTime.isAfter(intervalStart))
-        .fold(0.0, (sum, log) => sum + log.doseGiven);
+    return MedicationDoseUtils.getActiveDoseAtTime(
+      medication,
+      doseLogs,
+      DateTime.now(),
+    );
   }
 
   @override
