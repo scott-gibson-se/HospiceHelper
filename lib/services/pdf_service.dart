@@ -374,7 +374,7 @@ class PdfService {
     if (doses.isEmpty) {
       return '';
     }
-    return doses.map((dose) => _formatDoseAmount(dose.doseGiven)).join('+');
+    return doses.map((dose) => _formatDoseAmount(dose.doseGiven)).join('\n');
   }
 
   static List<pw.Widget>? _buildMonthlyDoseGridSection(
@@ -607,7 +607,7 @@ class PdfService {
         if (reportStartDate != null && reportEndDate != null) ...[
           pw.SizedBox(height: 8),
           pw.Text(
-            'Report period: ${DateFormat('MMM dd, yyyy').format(reportStartDate)} – ${DateFormat('MMM dd, yyyy').format(reportEndDate)}',
+            'Report period: ${DateFormat('MMM dd, yyyy').format(reportStartDate)} - ${DateFormat('MMM dd, yyyy').format(reportEndDate)}',
             style: pw.TextStyle(
               fontSize: 14,
               fontWeight: pw.FontWeight.bold,
